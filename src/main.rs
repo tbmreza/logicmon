@@ -1,16 +1,10 @@
-// use tree_sitter::{Parser, InputEdit, Point};
-use tree_sitter::Parser;
-
 use tonic::{transport::Server, Request, Response, Status};
-
-use ts_proto::zer_server::{Zer, ZerServer};
-// use ts_proto::greeter_server::{Greeter, GreeterServer};
-// use ts_proto::{HelloReply, HelloRequest};
-// use ts_proto::HelloReply;
+use tree_sitter::{Parser, InputEdit, Point};
 
 pub mod ts_proto {
     tonic::include_proto!("ts");
 }
+use ts_proto::zer_server::{Zer, ZerServer};
 
 #[derive(Debug, Default)]
 pub struct Z {}
@@ -19,34 +13,16 @@ pub struct Z {}
 impl Zer for Z {
     async fn replace(
         &self,
-        request: Request<ts_proto::Source>,
+        _request: Request<ts_proto::Source>,
     ) -> Result<Response<ts_proto::Reply>, Status> {
         let reply = ts_proto::Reply { val: 200 };
         Ok(Response::new(reply))
     }
 }
 
-#[derive(Debug, Default)]
-pub struct G {}
-
-// #[tonic::async_trait]
-// impl Greeter for G {
-//     async fn say_hello(
-//         &self,
-//         request: Request<ts_proto::InputEdit>,
-//     ) -> Result<Response<HelloReply>, Status> {
-//         println!("Got a request: {:?}", request);
-//
-//         let reply = ts_proto::HelloReply {
-//             message: format!("Hello {}!", request.into_inner().message),
-//         };
-//
-//         Ok(Response::new(reply))
-//     }
-// }
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+// fn main() {
     // let lang = tree_sitter_utlc::language();
     let lang = tree_sitter_rust::language();
 
@@ -59,10 +35,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let root_node = tree.root_node();
     println!("{:?}", root_node);
 
+    let new_source_code = "fn test(a: u32) {}";
+
+    tree.edit(&InputEdit {
+      start_byte: 8,
+      old_end_byte: 8,
+      new_end_byte: 14,
+      start_position: Point::new(0, 8),
+      old_end_position: Point::new(0, 8),
+      new_end_position: Point::new(0, 14),
+    });
+
+    let new_tree = parser.parse(new_source_code, Some(&tree)).expect("todo");
+    println!("{:?}", new_tree.root_node());
+
+
 
     // tonic
     let addr = "[::1]:50051".parse()?;
-    // let greeter = G::default();
 
     Server::builder()
         // .add_service(GreeterServer::new(greeter))
