@@ -1,0 +1,21 @@
+[package]
+name = "logicmon"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+prost = "0.12.4"
+tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
+tonic = "0.11.0"
+# Example code at https://github.com/tree-sitter/tree-sitter/tree/master/lib/binding_rust
+# doesn't work without modifications with tree-sitter != "0.20". Otherwise, presume latest is greatest.
+tree-sitter = "0.20"
+tree-sitter-rust = "0.20.4"
+# tree-sitter-rust = { path = "../../gh/tree-sitter-rust" }
+tree-sitter-utlc = { path = "../../gh/tree-sitter-utlc" }
+
+[build-dependencies]
+cc="*"
+tonic-build = "0.11.0"

@@ -1,0 +1,32 @@
+syntax = "proto3";
+package ts;
+
+// Zer the analyzer trait.
+service Zer {
+    rpc Replace (Source) returns (Reply);
+}
+
+service Greeter {
+    // rpc SayHello (HelloRequest) returns (HelloReply);
+    rpc SayHello (InputEdit) returns (HelloReply);
+}
+
+message Source {
+   string val = 1;
+}
+
+message Reply {
+   int32 val = 1;
+}
+
+// message HelloRequest {
+//    string name = 1;
+// }
+
+message HelloReply {
+    string message = 1;
+}
+
+message InputEdit {
+    string message = 1;
+}
