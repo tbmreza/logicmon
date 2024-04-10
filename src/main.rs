@@ -53,13 +53,20 @@ impl Z {
 
 #[tonic::async_trait]
 impl Zer for Z {
+    // ?? doesn't do its only job
     async fn replace(
         &self,
-        _request: Request<ts_proto::Source>,
+        request: Request<ts_proto::Source>,
     ) -> Result<Response<ts_proto::Reply>, Status> {
-        self.parse( "fn really_really_long(a: u32) {}");
+        let ts_proto::Source { val } = request.into_inner();
 
-        let reply = ts_proto::Reply { val: 200 };
+        self.parse(val);
+
+        let ast_ptr = Arc::clone(&self.ast);
+        let ast = ast_ptr.lock().unwrap();
+        let data = format!("{:?}", ast.clone().unwrap().root_node().has_changes());
+
+        let reply = ts_proto::Reply { val: data };
         Ok(Response::new(reply))
     }
 }

@@ -11,7 +11,8 @@ message Source {
 }
 
 message Reply {
-   int32 val = 1;
+   // int32 val = 1;
+   string val = 1;
 }
 
 message InputEdit {
