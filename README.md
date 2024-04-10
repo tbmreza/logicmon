@@ -8,3 +8,6 @@ cargo r                   # start rpc server in one terminal session/pane...
 cargo r --example client  # ...fire request from example client
 cargo r --example dl
 ```
+
+?? cargo workspace
+https://github.com/tokio-rs/axum/blob/main/Cargo.toml

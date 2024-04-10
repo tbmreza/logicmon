@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 use tonic::{transport::Server, Request, Response, Status};
 use tree_sitter::{Parser, Tree};
+use logicmon::{Facts, LambdaCalculusDl};
 
 pub mod ts_proto {
     tonic::include_proto!("ts");
@@ -9,9 +10,9 @@ use ts_proto::zer_server::{Zer, ZerServer};
 
 
 pub struct Z {
-    // std::cell::RefCell<Option<Tree>> here wouldn't suffice because
-    // tonic::async_trait needs Sync trait to run on multiple threads. Consult
-    // [the book] for a refresher on this concurrency topic.
+    // std::cell::RefCell<Option<Tree>> would have been enough here if
+    // tonic::async_trait runs on a single thread (i.e. doesn't need Sync
+    // trait). Consult [the book] for a refresher on this concurrency topic.
     //
     // [the book]: https://doc.rust-lang.org/book/ch16-03-shared-state.html
     ast: Arc<Mutex<Option<Tree>>>,
@@ -64,9 +65,20 @@ impl Zer for Z {
 
         let ast_ptr = Arc::clone(&self.ast);
         let ast = ast_ptr.lock().unwrap();
-        let data = format!("{:?}", ast.clone().unwrap().root_node().has_changes());
+        let _data = format!("{:?}", ast.clone().unwrap().root_node().has_changes());
 
-        let reply = ts_proto::Reply { val: data };
+        // Reply with analysis results.
+        let facts = Facts::from("todo");
+
+        let lc = LambdaCalculusDl {
+            source_lambda: facts.0,
+            source_var_ref: facts.1,
+            source_application: facts.2
+        };
+        let res = lc.value_flows_to();
+        // let res = vec![0, 1];
+
+        let reply = ts_proto::Reply { val: format!("{:?}", res) };
         Ok(Response::new(reply))
     }
 }

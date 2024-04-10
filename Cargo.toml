@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 ascent = "0.6.0"
+leptos = { version = "0.6.10", features = ["csr"] }
 prost = "0.12.4"
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
 tonic = "0.11.0"
