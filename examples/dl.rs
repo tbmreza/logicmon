@@ -46,37 +46,44 @@ impl LambdaCalculusDl {
     }
 }
 
+// ?? source-facts roundtrip: not needed at least for now, only Facts::from(source)
+// pre.rkt or its tree_sitter translation
+
+struct Facts(Vec<(u32, u32, u32)>,Vec<(u32, u32)>,Vec<(u32, u32, u32)>);
+impl Facts {
+    fn from(_source: impl AsRef<[u8]>) -> Self {
+        Facts(
+            vec![(6,7,8), (1,2,3)],
+            vec![(5,2), (4,2), (10,7), (9,7)],
+            vec![(8,9,10), (0,1,6), (3,4,5)])
+    }
+}
+
 fn main() {
-   let mut dl = AscentProgram::default();
-   dl.source_lambda = vec![(3,10,2), (6,11,5)];
-   dl.source_var_ref = vec![(2,10), (5,11)];
-   dl.source_application = vec![(7,3,6)];
-   dl.run();
-   println!("value_flows_to: {:?}", dl.value_flows_to);  // [(3, 3), (6, 6), (6, 10), (6, 2), (6, 7)]
+    // let mut dl = AscentProgram::default();
+    // dl.source_lambda = vec![(3,10,2), (6,11,5)];
+    // dl.source_var_ref = vec![(2,10), (5,11)];
+    // dl.source_application = vec![(7,3,6)];
+    // dl.run();
+    // println!("value_flows_to: {:?}", dl.value_flows_to);  // [(3, 3), (6, 6), (6, 10), (6, 2), (6, 7)]
 
-   let mut d2 = AscentProgram::default();
-   d2.source_lambda = vec![(1,2,3), (4,5,6)];
-   d2.source_var_ref = vec![(3,2), (6,5)];
-   d2.source_application = vec![(0,1,4)];
-   d2.run();
-   println!("2. value_flows_to: {:?}", d2.value_flows_to);  // [(3, 3), (6, 6), (6, 10), (6, 2), (6, 7)]
+    // let mut d2 = AscentProgram::default();
+    // d2.source_lambda = vec![(1,2,3), (4,5,6)];
+    // d2.source_var_ref = vec![(3,2), (6,5)];
+    // d2.source_application = vec![(0,1,4)];
+    // d2.run();
+    // println!("2. value_flows_to: {:?}", d2.value_flows_to);  // [(3, 3), (6, 6), (6, 10), (6, 2), (6, 7)]
 
-   // Ω Omega combinator (lambda (x) (x x)) (lambda (x) (x x))
-   let mut d3 = AscentProgram::default();
-   // ?? source-facts roundtrip
-   // source to facts vec; struct Dl, Dl::from(source), dl.run(), dl.value_flows_to
+    // Ω Omega combinator ((lambda (x2) (x4 x5)3)1 (lambda (x7) (x9 x10)8)6)0
+    // Ω Omega combinator (lambda (x) (x x)) (lambda (x) (x x))
 
-   // d3.source_lambda = vec![(6,7,8), (1,2,3)];
-   // d3.source_var_ref = vec![(5,2), (4,2), (10,7), (9,7)];
-   // d3.source_application = vec![(8,9,10), (0,1,6), (3,4,5)];
-   // d3.run();
-   // println!("Ω value_flows_to: {:?}", d3.value_flows_to);  // [(1, 1), (6, 6), (6, 2), (6, 5), (6, 4)]
+    let facts = Facts::from("todo");
 
-   let mut lc = LambdaCalculusDl {
-       source_lambda: vec![(6,7,8), (1,2,3)],
-       source_var_ref: vec![(5,2), (4,2), (10,7), (9,7)],
-       source_application: vec![(8,9,10), (0,1,6), (3,4,5)]
-   };
-   let res = lc.value_flows_to();
-   println!("res: {:?}", res);
+    let lc = LambdaCalculusDl {
+        source_lambda: facts.0,
+        source_var_ref: facts.1,
+        source_application: facts.2
+    };
+    let res = lc.value_flows_to();
+    println!("res: {:?}", res);  // [(1, 1), (6, 6), (6, 2), (6, 5), (6, 4)]
 }
