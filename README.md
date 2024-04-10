@@ -1,9 +1,6 @@
-POST /draft
-body whole source
-
-tree-sitter-utlc: ast util and syntax highlight
-incremental-analyzer-web: monaco editor web frontend app
-logicmon: ascent engine as an rpc service that ingresses source deltas
+- tree-sitter-utlc: ast util and syntax highlight
+- incremental-analyzer-web: monaco editor web frontend app
+- logicmon: logic program as an rpc service that monitors subject language source to analyze it incrementally
 
 ## Testing
 ```

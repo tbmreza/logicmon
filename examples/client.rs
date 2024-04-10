@@ -10,7 +10,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut client = ZerClient::connect("http://[::1]:50051").await?;
 
     let request = tonic::Request::new(Source {
-        val: "Tonic".into(),
+        val: String::from("fn test(a: u32) {}"),
     });
 
     let response = client.replace(request).await?;
@@ -19,12 +19,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-
-// tree.edit(&InputEdit {
-//   start_byte: 8,
-//   old_end_byte: 8,
-//   new_end_byte: 14,
-//   start_position: Point::new(0, 8),
-//   old_end_position: Point::new(0, 8),
-//   new_end_position: Point::new(0, 14),
-// });

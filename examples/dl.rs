@@ -27,6 +27,25 @@ ascent! {
                                 value_flows_to(v, body);
 }
 
+struct LambdaCalculusDl {
+    source_lambda: Vec<(u32, u32, u32)>,
+    source_var_ref: Vec<(u32, u32)>,
+    source_application: Vec<(u32, u32, u32)>
+}
+
+impl LambdaCalculusDl {
+    fn value_flows_to(&self) -> Vec<(u32, u32)> {
+        let mut dl = AscentProgram::default();
+
+        dl.source_lambda = self.source_lambda.clone();
+        dl.source_var_ref = self.source_var_ref.clone();
+        dl.source_application = self.source_application.clone();
+
+        dl.run();
+        dl.value_flows_to
+    }
+}
+
 fn main() {
    let mut dl = AscentProgram::default();
    dl.source_lambda = vec![(3,10,2), (6,11,5)];
@@ -44,11 +63,20 @@ fn main() {
 
    // Ω Omega combinator (lambda (x) (x x)) (lambda (x) (x x))
    let mut d3 = AscentProgram::default();
-   // ?? reconstruct source from facts
+   // ?? source-facts roundtrip
+   // source to facts vec; struct Dl, Dl::from(source), dl.run(), dl.value_flows_to
+
    // d3.source_lambda = vec![(6,7,8), (1,2,3)];
-   d3.source_lambda = vec![(1,2,3), (6,7,8)];
-   d3.source_var_ref = vec![(5,2), (4,2), (10,7), (9,7)];
-   d3.source_application = vec![(8,9,10), (0,1,6), (3,4,5)];
-   d3.run();
-   println!("Ω value_flows_to: {:?}", d3.value_flows_to);  // [(1, 1), (6, 6), (6, 2), (6, 5), (6, 4)]
+   // d3.source_var_ref = vec![(5,2), (4,2), (10,7), (9,7)];
+   // d3.source_application = vec![(8,9,10), (0,1,6), (3,4,5)];
+   // d3.run();
+   // println!("Ω value_flows_to: {:?}", d3.value_flows_to);  // [(1, 1), (6, 6), (6, 2), (6, 5), (6, 4)]
+
+   let mut lc = LambdaCalculusDl {
+       source_lambda: vec![(6,7,8), (1,2,3)],
+       source_var_ref: vec![(5,2), (4,2), (10,7), (9,7)],
+       source_application: vec![(8,9,10), (0,1,6), (3,4,5)]
+   };
+   let res = lc.value_flows_to();
+   println!("res: {:?}", res);
 }
