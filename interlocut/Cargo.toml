@@ -1,0 +1,17 @@
+[package]
+name = "interlocut"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "a lang dev project"
+homepage = "https://handzalah.com"
+# documentation = "https://docs.rs/interlocut"
+repository = "https://github.com/tbmreza/interlocut"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ascent = "0.6.0"
+tree-sitter = "0.22.5"
+tree-sitter-rust = "0.21.2"
+tree-sitter-utlc = { path = "../../tree-sitter-utlc" }
