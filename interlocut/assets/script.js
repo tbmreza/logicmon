@@ -19,7 +19,7 @@ setTimeout(() => {
 }, 1000);
 
 setTimeout(() => {
-    socket.send('About done here...');
+    socket.send("((lambda (x) (x x)) (lambda (x) (x x)))");
     console.log("Sending close over websocket");
     socket.close(3000, "Crash and Burn!");
 }, 3000);
