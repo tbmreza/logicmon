@@ -16,7 +16,7 @@ axum = { version = "0.7.5", features = ["ws"] }
 axum-extra = { version = "0.9.3", features = ["typed-header"] }
 tree-sitter = "0.22.5"
 tree-sitter-rust = "0.21.2"
-tree-sitter-utlc = { path = "../../tree-sitter-utlc" }
+tree-sitter-utlc = { git = "https://github.com/tbmreza/tree-sitter-utlc" }
 futures = "0.3"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 headers = "0.4"
