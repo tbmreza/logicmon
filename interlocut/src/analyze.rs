@@ -1,3 +1,6 @@
+// Merged PRs using QueryCursor for inspirations:
+// https://github.com/zed-industries/zed/pull/11376/files#diff-aa3ab7c2b46d1de04d745789d794c0fb66cfd2fbfa2b18474bde1a7c63d4e2ac
+
 #![allow(unused)]
 use std::collections::HashMap;
 use tree_sitter::Node;
@@ -75,8 +78,7 @@ type VarRefFact = (u32, u32);
 type ApplFact = (u32, u32, u32);
 struct ProgramFacts(Vec<LambdaFact>, Vec<VarRefFact>, Vec<ApplFact>);
 impl ProgramFacts {
-    fn from(node: &mut Node) -> Self {
-        println!("NODEY: {:?}", node);
+    fn from(source: impl AsRef<[u8]>) -> Self {
         let mut var_ref_tbl: HashMap<Id, VarRefFact> = HashMap::new();
         let mut appl_tbl: HashMap<Id, ApplFact> = HashMap::new();
         let mut lambda_tbl: HashMap<Id, LambdaFact> = HashMap::new();
@@ -84,7 +86,48 @@ impl ProgramFacts {
         let mut n = 1..;
         let mut var_id_tbl = VarIdTable::new();
 
-        // PICKUP tree walk
+
+        use tree_sitter::{Parser, InputEdit, Point, Node, QueryCursor, Query};
+
+        let lang = &tree_sitter_utlc::language();
+        // let lang = &tree_sitter_rust::language();
+
+        // let source = r#"
+        // #[allow(unused)]
+        // "#;
+        // let source = r#"
+        // (lambda (x) #f)
+        // "#;
+
+        let mut lang_parser = {
+            let mut p = Parser::new();
+            p.set_language(lang).expect("grammar crate error");
+            p
+        };
+
+        let mut tree = lang_parser.parse(source, None).expect("todo");
+
+        let mut cursor = QueryCursor::new();
+
+        let mut query = Query::
+            new(lang,
+                r#"
+                (lambda)
+                "#)
+            .unwrap();
+
+        let text_provider: &[u8] = &[0];
+        let matches_iter = cursor
+            .matches(&query, tree.root_node(), text_provider);  // ?? what is text_provider used for
+
+        println!("count: {:?}", matches_iter.count());
+        // let case_lambda = matches_iter.count() == 1;  // ?? entire source is nothing but lambda
+        // for mat in matches_iter {
+        //     println!("FORLOOP");
+        //     println!("{:?}", mat);
+        // }
+
+
         // fn make_tables(ast: &Tree) -> Id {
         fn make_tables(expr: &Node) -> Id {
             use Expr::*;
@@ -112,11 +155,11 @@ impl ProgramFacts {
                 _ => 0
             }
         }
-        let _ = make_tables(node);
+        let _ = make_tables(&tree.root_node());
 
         let id = n.next().expect("infinite n");  // ?? closure fn
 
-        let var_id = var_id_tbl.lookup_or_new(node);
+        let var_id = var_id_tbl.lookup_or_new(&tree.root_node());
         lambda_tbl.insert(id, (id, var_id, id));
 
         ProgramFacts(
@@ -134,29 +177,14 @@ mod tests {
 
     #[test]
     fn preprocessed_source() {
-        // ?? method ideas if we ever extend Node: Node::default()
-        let mut utlc_parser = {
-            let mut p = Parser::new();
-            let lang = &tree_sitter_utlc::language();
-            p.set_language(lang).expect("grammar crate error");
-            p
-        };
-
-        let tree = {
-            let big_omega = String::from("x");
-            // let big_omega = String::from("((lambda (x) (x x)) (lambda (x) (x x)))");
-            // let big_omega = String::from("(func a1 a2)");
-            utlc_parser.parse(big_omega, None).expect("errors but not panics")
-        };
-        let _ = ProgramFacts::from(&mut tree.root_node());
     }
 }
 
 type ValueFlowsTo = Vec<(u32, u32)>;
-pub fn value_flows_to(input: &Node) -> ValueFlowsTo {
+pub fn value_flows_to(source: impl AsRef<[u8]>) -> ValueFlowsTo {
     let mut dl = AscentProgram::default();
-    let mut prog: Node = input.clone();
-    let facts = ProgramFacts::from(&mut prog);
+
+    let facts = ProgramFacts::from(source);
 
     dl.source_lambda = facts.0;
     dl.source_var_ref = facts.1;

@@ -49,7 +49,7 @@ enum InternalError {
 
 /// Model of things being sent back to browser.
 fn goodies() -> (StdOut, Vec<InternalError>) {
-    let mut rust_parser = {
+    let mut lang_parser = {
         let mut p = Parser::new();
         // let lang = &tree_sitter_rust::language();
         let lang = &tree_sitter_utlc::language();
@@ -57,12 +57,11 @@ fn goodies() -> (StdOut, Vec<InternalError>) {
         p
     };
 
-    let mut tree = {
-        // let big_omega = String::from("fn test() {}");  // ??
-        // let big_omega = String::from("((lambda (x) (x x)) (lambda (x) (x x)))");
-        let big_omega = String::from("(func a1 a2)");
-        rust_parser.parse(big_omega, None).expect("?? can source make this panic")
-    };
+    let source = r#"
+    (lambda (x) #f)
+    "#;
+    let mut tree = lang_parser.parse(source, None).expect("errors but not panics");
+
     println!("{:?}", tree.root_node());
     let tree_clone = tree.clone();
     let mut cursor = tree_clone.walk();
@@ -73,11 +72,11 @@ fn goodies() -> (StdOut, Vec<InternalError>) {
     // rerun ascent on edit
     let (new_src, coords) = editor();
     tree.edit(&coords);
-    let new_tree = rust_parser.parse(new_src, Some(&tree)).expect("todo");
+    let new_tree = lang_parser.parse(new_src, Some(&tree)).expect("todo");
     let nt = new_tree.root_node();
     println!("{:?}", nt);
 
-    let stdout = format!("{:?}", analyze::value_flows_to(&nt));
+    let stdout = format!("{:?}", analyze::value_flows_to(source));
     (stdout, Vec::new())
 }
 
