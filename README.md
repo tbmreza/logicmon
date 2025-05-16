@@ -1,10 +1,12 @@
+# poster
 ```
-cd interlocut
-cargo r
+StringCopy(s, n)
+for i := 1 to n
+	t[i] := s[i]
+return t
 
-cd interlocut/web-editor
-npm run dev  # npm run build:release in build.rs is an idea
+output StringCopy("Poster", 255)  -- outputs "Poster"
 ```
 
-## Status
-Work in progress. Everything outside interlocut folder are old drafts.
+## Contributing
+The project is in ideation phase. `DRAFT.md` is where I dump my thoughts.
