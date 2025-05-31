@@ -16,6 +16,7 @@ fun lookup "bogus" = 10000
 
 %term ID of string | NUM of int | PLUS | TIMES | PRINT |
       SEMI | EOF | CARAT | DIV | SUB
+	| FOR | TO | DOWNTO
 %nonterm EXP of int | START of int option
 
 %name Poster

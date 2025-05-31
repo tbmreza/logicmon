@@ -24,6 +24,9 @@ ws = [\ \t];
 "+"      => (Tokens.PLUS(!pos,!pos));
 "*"      => (Tokens.TIMES(!pos,!pos));
 ";"      => (Tokens.SEMI(!pos,!pos));
+"for"    => (Tokens.FOR(!pos,!pos));
+"to"     => (Tokens.TO(!pos,!pos));
+"downto" => (Tokens.DOWNTO(!pos,!pos));
 {alpha}+ => (if yytext="print"
                  then Tokens.PRINT(!pos,!pos)
                  else Tokens.ID(yytext,!pos,!pos)
