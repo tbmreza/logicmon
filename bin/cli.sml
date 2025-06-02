@@ -1,212 +1,208 @@
-(* poster --version *)
-(* poster string-copy.al *)
-
-
-datatype ArgType =                 (* Example: *)
-    Flag of       bool ref         (* -v or --verbose *)
-  | StringArg of  string ref       (* -f file.txt *)
-  | IntArg of     int ref          (* -n 10 *)
-  | StringList of string list ref  (* -I dir1 -I dir2 *)
-
-type ArgDescriptor = {
-    shortName: string option,      (* -v *)
-    longName: string option,       (* --verbose *)
-    description: string,           (* Description for help text *)
-    argType: ArgType               (* Type of argument *)
-};
-
-exception ArgParseError of string;
-
-(* Struct with mutable fields. *)
-structure ArgParser = struct
-    val arguments: ArgDescriptor list ref = ref []
-    val showHelp = ref true
+structure CommandLine = struct
+    datatype flag = 
+        Help | Version | Verbose | Debug | Output of string | Input of string
     
-    fun registerArg (arg: ArgDescriptor) =
-        arguments := arg :: (!arguments)
-
-    fun findArg [] _ _ = NONE
-      | findArg (arg::args) shortName longName =
+    datatype config = Config of {
+        help: bool,
+        version: bool,
+        verbose: bool,
+        debug: bool,
+        input_file: string option,
+        output_file: string option,
+        remaining_args: string list
+    }
+    
+    (* Catch-all exception for usage errors *)
+    exception ParseError of string
+    
+    val default_config = Config {
+        help = false,
+        version = false, 
+        verbose = false,
+        debug = false,
+        input_file = NONE,
+        output_file = NONE,
+        remaining_args = []
+    }
+    
+    fun update_config (Config {help, version, verbose, debug, input_file, output_file, remaining_args}) flag =
+        case flag of
+            Help => Config {help=true, version=version, verbose=verbose, debug=debug, 
+                          input_file=input_file, output_file=output_file, remaining_args=remaining_args}
+          | Version => Config {help=help, version=true, verbose=verbose, debug=debug,
+                             input_file=input_file, output_file=output_file, remaining_args=remaining_args}
+          | Verbose => Config {help=help, version=version, verbose=true, debug=debug,
+                             input_file=input_file, output_file=output_file, remaining_args=remaining_args}
+          | Debug => Config {help=help, version=version, verbose=verbose, debug=true,
+                           input_file=input_file, output_file=output_file, remaining_args=remaining_args}
+          | Input filename => Config {help=help, version=version, verbose=verbose, debug=debug,
+                                    input_file=SOME filename, output_file=output_file, remaining_args=remaining_args}
+          | Output filename => Config {help=help, version=version, verbose=verbose, debug=debug,
+                                     input_file=input_file, output_file=SOME filename, remaining_args=remaining_args}
+    
+    fun parse_arg arg =
         case arg of
-            (* {shortName=SOME s, longName=_, description=_, argType=_} =>  ?? *)
-            (*     if s = shortName then SOME arg else findArg args shortName longName *)
-            {shortName=NONE, longName=SOME l, description=_, argType=_} => 
-                if l = longName then SOME arg else findArg args shortName longName
-          | {shortName=SOME s, longName=SOME l, description=_, argType=_} => 
-                if s = shortName orelse l = longName then SOME arg else findArg args shortName longName
-          | _ => findArg args shortName longName
+            "-h" => SOME Help
+          | "--help" => SOME Help
+          | "-V" => SOME Version
+          | "--version" => SOME Version
+          | "--verbose" => SOME Verbose
+          | "-d" => SOME Debug
+          | "--debug" => SOME Debug
+          | _ => 
+            if String.isPrefix "-o" arg then
+                if String.size arg > 2 then
+                    SOME (Output (String.extract(arg, 2, NONE)))
+                else NONE (* -o requires argument *)
+            else if String.isPrefix "--output=" arg then
+                SOME (Output (String.extract(arg, 9, NONE)))
+            else if String.isPrefix "-i" arg then
+                if String.size arg > 2 then
+                    SOME (Input (String.extract(arg, 2, NONE)))
+                else NONE
+            else if String.isPrefix "--input=" arg then
+                SOME (Input (String.extract(arg, 8, NONE)))
+            else NONE
     
-
-    fun processArg (argName, valueOpt, remainingArgs) =
-        let
-            val (isShort, name) = 
-                if String.isPrefix "--" argName then
-                    (false, String.extract(argName, 2, NONE))
-                else if String.isPrefix "-" argName then
-                    (true, String.extract(argName, 1, NONE))
+    (* Parse arguments with state *)
+    fun parse_args_helper ([], config, expecting_value, remaining) =
+        (case expecting_value of
+            NONE => (config, rev remaining)
+          | SOME flag_name => raise ParseError ("Missing value for " ^ flag_name))
+      | parse_args_helper (arg::rest, config, expecting_value, remaining) =
+        (case expecting_value of
+            SOME "output" => 
+                parse_args_helper(rest, update_config config (Output arg), NONE, remaining)
+          | SOME "input" =>
+                parse_args_helper(rest, update_config config (Input arg), NONE, remaining)
+          | SOME flag_name => raise ParseError ("Unknown flag expecting value: " ^ flag_name)
+          | NONE =>
+            (case parse_arg arg of
+                SOME flag => parse_args_helper(rest, update_config config flag, NONE, remaining)
+              | NONE =>
+                if arg = "-o" then
+                    parse_args_helper(rest, config, SOME "output", remaining)
+                else if arg = "-i" then
+                    parse_args_helper(rest, config, SOME "input", remaining)
+                else if String.isPrefix "-" arg then
+                    raise ParseError ("Unknown option: " ^ arg)
                 else
-                    raise ArgParseError ("Unknown argument format: " ^ argName)
-                    
-            val arg = findArg (!arguments) (if isShort then name else "") (if isShort then "" else name)
-        in
-            case arg of
-                NONE => raise ArgParseError ("Unknown argument: " ^ argName)
-              | SOME {argType=Flag ref_val, ...} => 
-                    (ref_val := true; remainingArgs)
-              | SOME {argType=StringArg ref_val, ...} => 
-                    (case valueOpt of
-                         NONE => 
-                             (case remainingArgs of
-                                  [] => raise ArgParseError ("Missing value for " ^ argName)
-                                | value::rest => (ref_val := value; rest))
-                       | SOME value => (ref_val := value; remainingArgs))
-              | SOME {argType=IntArg ref_val, ...} => 
-                    (case valueOpt of
-                         NONE => 
-                             (case remainingArgs of
-                                  [] => raise ArgParseError ("Missing value for " ^ argName)
-                                | value::rest => 
-                                    ((ref_val := valOf (Int.fromString value)
-                                      handle Option => raise ArgParseError ("Invalid integer value for " ^ argName));
-                                     rest))
-                       | SOME value => 
-                           ((ref_val := valOf (Int.fromString value)
-                             handle Option => raise ArgParseError ("Invalid integer value for " ^ argName));
-                            remainingArgs))
-              | SOME {argType=StringList ref_val, ...} => 
-                    (case valueOpt of
-                         NONE => 
-                             (case remainingArgs of
-                                  [] => raise ArgParseError ("Missing value for " ^ argName)
-                                | value::rest => (ref_val := value :: (!ref_val); rest))
-                       | SOME value => (ref_val := value :: (!ref_val); remainingArgs))
-        end
-
-    fun processArgs [] = []
-      | processArgs (arg::args) =
-        if String.isPrefix "-" arg then
-            let
-                (* Check for argument with attached value like -f=file.txt *)
-                val parts = String.fields (fn c => c = #"=") arg
-            in
-                case parts of
-                    [name, value] => processArgs (processArg (name, SOME value, args))
-                  | [name] => processArgs (processArg (name, NONE, args))
-                  | _ => raise ArgParseError ("Invalid argument format: " ^ arg)
-            end
-        else
-            arg :: processArgs args
-
-    fun parse () =
-        (* Built-in subcommand flags *)
+                    parse_args_helper(rest, config, NONE, arg::remaining)))
+    
+    (* Main parsing function *)
+    fun parse_args args =
         let
-            val _ = registerArg {
-                shortName = SOME "h",
-                longName = SOME "help",
-                description = "Show this help message",
-                argType = Flag showHelp
-            }
-
-            val _ = registerArg {
-                shortName = SOME "V",
-                longName = SOME "version",
-                description = "Print version info and exit",
-                argType = Flag showHelp
-            }
-
-            val cmdLineArgs = CommandLine.arguments()
-            val remainingArgs = processArgs cmdLineArgs
+            val (Config {help, version, verbose, debug, input_file, output_file, remaining_args=_}, remaining) = 
+                parse_args_helper(args, default_config, NONE, [])
         in
-            (* If help flag is set, show help *)
-            if !showHelp then (printHelp(); remainingArgs) else remainingArgs
+            Config {help=help, version=version, verbose=verbose, debug=debug,
+                   input_file=input_file, output_file=output_file, remaining_args=remaining}
         end
-
-    (* Generate and print help text *)
-    and printHelp () =
+    
+    (* Pretty print configuration *)
+    fun config_to_string (Config {help, version, verbose, debug, input_file, output_file, remaining_args}) =
+        "Configuration:\n" ^
+        "  Help: " ^ Bool.toString help ^ "\n" ^
+        "  Version: " ^ Bool.toString version ^ "\n" ^
+        "  Verbose: " ^ Bool.toString verbose ^ "\n" ^
+        "  Debug: " ^ Bool.toString debug ^ "\n" ^
+        "  Input file: " ^ (case input_file of NONE => "None" | SOME f => f) ^ "\n" ^
+        "  Output file: " ^ (case output_file of NONE => "None" | SOME f => f) ^ "\n" ^
+        "  Remaining args: [" ^ String.concatWith ", " remaining_args ^ "]"
+    
+    (* Help text ??: bin name, example usage *)
+    val help_text = 
+        "Usage: program [OPTIONS] [FILES...]\n\n" ^
+        "Options:\n" ^
+        "  -h, --help           Show this help message\n" ^
+        "  -V, --version        Show version information\n" ^
+        "      --verbose        Enable verbose output\n" ^
+        "  -d, --debug         Enable debug mode\n" ^
+        "  -i FILE             Input file\n" ^
+        "      --input=FILE     Input file (alternative syntax)\n" ^
+        "  -o FILE             Output file\n" ^
+        "      --output=FILE    Output file (alternative syntax)\n\n" ^
+        "Examples:\n" ^
+        "  program -i input.txt -o output.txt\n" ^
+        "  program --input=data.txt --verbose file1.txt file2.txt\n" ^
+        "  program -d --output=result.txt *.sml"
+    
+    (* Interpret cli config. *)
+    fun run_app config =
         let
-            (* fun argToString {shortName, longName, description, ...} = *)
-            fun argToString {shortName, longName, description, argType as _} =
-                let
-                    val shortStr = case shortName of SOME s => "-" ^ s | NONE => ""
-                    val longStr = case longName of SOME l => "--" ^ l | NONE => ""
-                    val nameStr = 
-                        if shortStr <> "" andalso longStr <> "" then
-                            shortStr ^ ", " ^ longStr
-                        else
-                            shortStr ^ longStr
-                in
-                    "  " ^ nameStr ^ "\t" ^ description
-                end
+            val Config {help, version, verbose, debug, input_file, output_file, remaining_args} = config
+            val version_text = "v1.0\n"
+        in
+            if help then
+                print (help_text ^ "\n")
+            else if version then
+                print version_text
+            else
+                (if verbose then print "Running in verbose mode\n" else ();
+                 if debug then print "Debug mode enabled\n" else ();
+                 case input_file of
+                    SOME f => print ("Processing input file: " ^ f ^ "\n")
+                  | NONE => ();
+                 case output_file of
+                    SOME f => print ("Output will be written to: " ^ f ^ "\n")
+                  | NONE => ();
+                 if not (null remaining_args) then
+                    print ("Additional files: " ^ String.concatWith " " remaining_args ^ "\n")
+                 else ())
+        end
+end
+
+(* Example usage and test cases *)
+structure Main = struct
+    open CommandLine
+    
+    (* Test function with concrete examples *)
+    fun test_examples () =
+        let
+            val test_cases = [
+                ["--help"],
+                ["--verbose", "-d", "file1.txt", "file2.txt"],
+                ["-i", "input.txt", "-o", "output.txt"],
+                ["--input=data.txt", "--output=results.txt", "--verbose"],
+                ["-ooutput.txt", "-iinput.txt", "--debug"],
+                ["file1.txt", "file2.txt", "file3.txt"],
+                ["-V"]
+            ]
             
-            val helpLines = map argToString (!arguments)
-            val programName = CommandLine.name()
+            fun run_test (i, args) =
+                (print ("Test " ^ Int.toString i ^ ": " ^ String.concatWith " " args ^ "\n");
+                 let
+                     val config = parse_args args
+                 in
+                     print (config_to_string config ^ "\n");
+                     run_app config;
+                     print "---\n"
+                 end
+                 handle ParseError msg => print ("Parse Error: " ^ msg ^ "\n---\n"))
         in
-            print ("Usage: " ^ programName ^ " [options] [arguments]\n\n");
-            print "Options:\n";
-            app (fn line => print (line ^ "\n")) helpLines;
-            print "\n"
+            List.appi run_test test_cases
         end
-end;
+    
+    (* Main entry point *)
+    (* fun main () = *)
+    (*     let *)
+    (*         val args = CommandLine.arguments() (* This gets actual command line args *) *)
+    (*     in *)
+    (*         if null args then *)
+    (*             (print "No arguments provided. Running test examples:\n\n"; *)
+    (*              test_examples()) *)
+    (*         else *)
+    (*             let *)
+    (*                 val config = parse_args args *)
+    (*             in *)
+    (*                 run_app config *)
+    (*             end *)
+    (*             handle ParseError msg =>  *)
+    (*                 (print ("Error: " ^ msg ^ "\n"); *)
+    (*                  print help_text; *)
+    (*                  print "\n") *)
+    (*     end *)
+end
 
-(* Example usage *)
-fun main () =
-    let
-        val verbose = ref false
-        val printsVersion = ref true
-        val filename = ref ""
-        val count = ref 0
-        val threshold = ref 0.0
-        val includeDirs = ref ([] : string list)
-
-        (* Register arguments *)
-
-        (* val _ = ArgParser.registerArg { *)
-        (*     shortName = SOME "V", *)
-        (*     longName = SOME "version", *)
-        (*     description = "Print version info and exit", *)
-        (*     argType = Flag printsVersion *)
-        (* } *)
-
-        (* val _ = ArgParser.registerArg { *)
-        (*     shortName = SOME "f", *)
-        (*     longName = SOME "file", *)
-        (*     description = "Input file", *)
-        (*     argType = StringArg filename *)
-        (* } *)
-        (*  *)
-        (* val _ = ArgParser.registerArg { *)
-        (*     shortName = SOME "n", *)
-        (*     longName = SOME "count", *)
-        (*     description = "Number of iterations", *)
-        (*     argType = IntArg count *)
-        (* } *)
-        (*  *)
-        (* val _ = ArgParser.registerArg { *)
-        (*     shortName = SOME "I", *)
-        (*     longName = NONE, *)
-        (*     description = "Include directory (can be repeated)", *)
-        (*     argType = StringList includeDirs *)
-        (* } *)
-        (*  *)
-
-        val remainingArgs = ArgParser.parse()
-
-        fun boolToString b = if b then "true" else "false"
-
-        (* fun printStringList [] = print "none\n" *)
-        (*   | printStringList [x] = print (x ^ "\n") *)
-        (*   | printStringList (x::xs) = (print (x ^ ", "); printStringList xs) *)
-        (* val {cmdVersion} = {filename = ArgParser.filename, verbose = ArgParser.verbose} *)
-    in
-        print "Parsed arguments:\n"
-        (* ; *)
-        (* print ("  verbose: " ^ boolToString (!verbose) ^ "\n"); *)
-        (* print ("  filename: " ^ (!filename) ^ "\n"); *)
-        (* print ("  count: " ^ Int.toString (!count) ^ "\n"); *)
-        (* print ("  threshold: " ^ Real.toString (!threshold) ^ "\n"); *)
-        (* print ("  include dirs: "); *)
-        (* printStringList (rev (!includeDirs)); *)
-        (* print "\nRemaining arguments: "; *)
-        (* printStringList remainingArgs *)
-    end;
-val _ = main();
+(* In repl *)
+(* Main.test_examples(); *)
