@@ -1,4 +1,4 @@
-(* Simple REPL (Read-Eval-Print Loop) for Standard ML using Poly/ML *)
+(* REPL interface to our interpreter *)
 
 exception REPLExit;
 
