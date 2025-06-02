@@ -82,11 +82,16 @@ type env = (string * value) list;
 fun lookup x [] = raise Fail ("Unbound variable: " ^ x)
   | lookup x ((y, v)::env) = if x = y then v else lookup x env;
 
+fun extend x v env = (x, v)::env;
+
 fun io_interp (OUTPUT s) = (print(s ^ "\n"); UNIT)
   | io_interp (INT n) = (n; UNIT)
   | io_interp (REF v) =
     case v of
-      INT n => (n; UNIT)
+      INT n =>    (n; UNIT)
+    | STRING s => (s; UNIT)
+    | BOOL b =>   (b; UNIT)
+    | UNIT =>     ((); UNIT)
 ;
 fun toString(STRING s) = s
   | toString(INT v) = Int.toString v
@@ -96,11 +101,8 @@ fun toString(STRING s) = s
 ;
 
 
-fun output_lookup(name, env, k) = k(lookup name env);
-
 fun cps (LInt v, _, k) = k (INT v)
   | cps (LStr v, _, k) = k (STRING v)
-
 
   | cps (LVar name, env, k) = let
     val got = lookup name env
@@ -112,37 +114,12 @@ fun cps (LInt v, _, k) = k (INT v)
     cps (arg, env, fn got => k (OUTPUT (toString got)))
 
 
-  (*   output_lookup(name, env, fn v => ) *)
+  | cps (LLet ([], body), env, k) = cps (body, env, k)
 
-  (* name => { output name} *)
+  | cps (LLet ((k1, expr1)::rest, body), env, k) =
 
-  (* | cps (LLet ([], body), env, k) = in_cps (body, k) *)
-  (* | cps (LApp ((LVar "#output"), LInt v), _, k) =  k (OUTPUT (toString (LInt v))) *)
-  (* | cps (LApp ((LVar "#output"), LStr v), _, k) =  k (OUTPUT (toString (LStr v))) *)
-  (* | cps (LApp ((LVar "#output"), LBool v), _, k) =  k (OUTPUT (toString (LBool v))) *)
+    cps (body, env, k)
 ;
-
-fun in_cps(LInt n, k) = k (INT n)
-  | in_cps(LStr s, k) = k (STRING s)
-
-  (* | in_cps(LVar name, env, k) = *)
-  (*   (* let val got = lookup name env in *) *)
-  (*   (* let val got = 8 in *) *)
-  (*   k (INT 9) *)
-  (*   (* end *) *)
-
-  | in_cps(LLet ([], body), k) = in_cps (body, k)
-
-  (* | in_cps(LLet ([(varname, expr)], body), k) = in_cps (body, k) *)
-
-  | in_cps(LApp ((LVar "#output"), (LStr s)), k) =  k (OUTPUT s)
-  | in_cps(LApp ((LVar "#output"), (LInt v)), k) =  k (OUTPUT (Int.toString v))
-  | in_cps(LApp ((LVar "#output"), (LBool v)), k) = k (OUTPUT (Bool.toString v))
-
-  (* | in_cps(LApp ((LVar "#output"), e), k) = in_cps (LApp ((LVar "#output"), in_cps (e, k))) *)
-
-;
-
 
 fun stmt1(k) = k(print("stmt1"));
 fun stmt2(k) = k(print("stmtB"));
@@ -186,52 +163,32 @@ fun void(k) =
   end;
 void(fn x => x);
 
-fun TEST(k) =
-  (* println("hore", (fn _ => println("berhasil", k))); *)
-  (* letin("okwwdoki", fn a1 => println(a1, k)); *)
-  in_cps(LInt 999, fn x => x);  (* ??: print string with if-stmt; make up user of store; "save_continuation" *)
-  (* in_cps(LIf ((LBool true), (LIo (LApp ((LVar "#output"), (LStr "atas")))), (LIo (LApp ((LVar "#output"), (LStr "bawah"))))), fn x => x); *)
-
-  (* eq(2, 2, fn pred => *)
-  (*   if pred then *)
-  (*     println("atas", k) *)
-  (*   else *)
-  (*     println("bawah", k)); *)
-  ;
-
-(* TEST(fn x => x); *)
-TEST(fn x => UNIT);
-
-(* back *)
-(* function save_continuation(cont) { *)
-(*     snapshot = Continuation { *)
-(*         function: cont, *)
-(*         args: current_args, *)
-(*         environment: environment.clone(), *)
-(*         call_stack: call_stack.clone(),  *)
-(*         timestamp: now(), *)
-(*         parent: debugger.current_continuation() *)
-(*     } *)
-(*      *)
-(*     debugger.history.append(snapshot) *)
-(*     debugger.current_index = debugger.history.length - 1 *)
-(*      *)
-(*     // Check for breakpoints or watches *)
-(*     if should_break(snapshot) { *)
-(*         enter_debug_mode(snapshot) *)
-(*     } *)
-(* } *)
+(* fun TEST(k) = *)
+(*   (* println("hore", (fn _ => println("berhasil", k))); *) *)
+(*   (* letin("okwwdoki", fn a1 => println(a1, k)); *) *)
+(*   in_cps(LInt 999, fn x => x);  (* ??: "save_continuation" *) *)
+(*   (* in_cps(LIf ((LBool true), (LIo (LApp ((LVar "#output"), (LStr "atas")))), (LIo (LApp ((LVar "#output"), (LStr "bawah"))))), fn x => x); *) *)
+(**)
+(*   (* eq(2, 2, fn pred => *) *)
+(*   (*   if pred then *) *)
+(*   (*     println("atas", k) *) *)
+(*   (*   else *) *)
+(*   (*     println("bawah", k)); *) *)
+(*   ; *)
+(**)
+(* (* TEST(fn x => x); *) *)
+(* TEST(fn x => UNIT); *)
 
 fun seq(stmt1, stmt2, k) =
   stmt1(fn _ =>
     stmt2(k));
 
-fun PROG(k) =
-  (* seq(stmt1, fn k2 => k2(print("stmt2")), k); *)
-
-  (* let flow = seq(stmt1, stmt2, k) in *)
-
-  (* seq(stmt1, stmt2, k) end; *)
-  14;
-
-PROG(fn x => x);
+(* fun PROG(k) = *)
+(*   (* seq(stmt1, fn k2 => k2(print("stmt2")), k); *) *)
+(**)
+(*   (* let flow = seq(stmt1, stmt2, k) in *) *)
+(**)
+(*   (* seq(stmt1, stmt2, k) end; *) *)
+(*   14; *)
+(**)
+(* PROG(fn x => x); *)
