@@ -1,30 +1,3 @@
-(*
-StringCopy(s, n)
-for i := 1 to n
-	t[i] := s[i]
-return t
-
-#output StringCopy("Poster", 255)  -- outputs "Poster" 
-
-a1 := "bound"
-#output a1
-#output 12
-#output "ok"
-
-
-Fn { name, args, body }
-
-
-#output 12   Put { printable }
-... transformed to ...  ??
-cps_output 12 toString
-toString : Print -> String
-
-cps_output : Print -> (Print -> String) -> String
-
-
-*)
-
 fun stringCopy(s, n) =
     let
         val t = ref "";  (* Use a reference to simulate a mutable string *)
@@ -57,12 +30,8 @@ fn nil => 0
 
 *)
 
-datatype stmt =
-  (* LExprStmt of expr *)
-  (* LIf of expr * stmt * stmt *)
-  LIf of   expr * expr * expr
-| LIo of   expr
-and expr =
+
+datatype expr =
   LLet of  (string * expr) * expr
 | LInt of  int
 | LMul of  expr list
@@ -70,7 +39,7 @@ and expr =
 | LBool of bool
 | LApp of  expr * expr
 | LVar of  string
-(* | LIo of stmt *)
+| LIf of   expr * expr * expr
 ;
 
 datatype value =
@@ -79,8 +48,8 @@ datatype value =
 | BOOL of bool
 | OUTPUT of string
 | REF of value
-| UNIT
-;
+| UNIT;
+
 type env = (string * value) list;
 
 (* It matters that env is an ordered list (of history of values)
@@ -108,6 +77,8 @@ fun toString(STRING s) = s
   | toString(REF v) = toString v
 ;
 
+fun as_expr (BOOL b) = (LBool b)
+
 (* ??: recursive value unwrap? *)
 fun from_ref (REF (INT n)) = LInt n
   | from_ref (INT n) = LInt n
@@ -115,9 +86,19 @@ fun from_ref (REF (INT n)) = LInt n
 
 
 (* Evaluate AST to a value via CPS rules. Saves env on every interesting
-   reductions (cps invocations in most rhs').
-    cps :  stmt/expr  -> value  *)
+   reductions (i.e. most of cps invocations in rhs').
+
+    cps :     expr    -> value  *)
 fun cps (LInt v, _, k) = k (INT v)
+  | cps (LStr v, _, k) = k (STRING v)
+  | cps (LBool v, _, k) = k (BOOL v)
+
+  | cps (LVar name, env, k) = let
+    val got = lookup name env
+  in
+    k (REF got)
+  end
+
 
   | cps (LMul [(LInt m), (LInt n)], env, k) =
     k (INT (m * n))
@@ -128,20 +109,19 @@ fun cps (LInt v, _, k) = k (INT v)
         cps (LMul [(from_ref la'), (from_ref lb')], env, k)))
 
 
-  | cps (LStr v, _, k) = k (STRING v)
-
-  | cps (LVar name, env, k) = let
-    val got = lookup name env
-  in
-    k (REF got)
-  end
-
   | cps (LApp ((LVar "#output"), arg), env, k) =
-    cps (arg, env, fn got =>
-    (print("putting...\n");
-    k (OUTPUT (toString got))))
-    (* _save
-    (k (OUTPUT (toString got)), env) *)
+    cps (arg, env, fn got => k (OUTPUT (toString got)))
+
+
+  | cps (LIf ((LBool true), exp, _), env, k) =
+    cps (exp, env, fn exp' => k exp')
+
+  | cps (LIf ((LBool false), _, exp), env, k) =
+    cps (exp, env, fn exp' => k exp')
+
+  | cps (LIf (b, thn, els), env, k) =
+    cps (b, env, fn b' =>
+      cps (LIf (as_expr b', thn, els), env, k))
 
 (*
   for i = lo to hi do
@@ -169,7 +149,8 @@ fun cps (LInt v, _, k) = k (INT v)
   *)
 
   | cps (LLet ((name, exp), body), env, k) =
-    cps (exp, env, fn exp' => cps (body, (extend name exp' env), k))
+    cps (exp, env, fn exp' =>
+      cps (body, (extend name exp' env), k))
 
 
 fun stmt1(k) = k(print("stmt1"));
@@ -205,8 +186,6 @@ fun init_k(e: env) =
 
 fun void(k) =
   let
-  (* val asu = LIf ((LBool true), (LIo (LApp ((LVar "#output"), (LStr "atas")))), (LIo (LApp ((LVar "#output"), (LStr "bawah"))))) *)
-
   (* ??: Poster.parsePath "examples/Output.al" < '#output "something"' *)
   (*  "concrete interpreter"
   CPS/cps.sml requires grammar/parser.sml for parsePath : Path -> ast
@@ -225,13 +204,13 @@ fun void(k) =
 
   *)
   val ast1 = LApp ((LVar "#output"), (LStr "something good happened !!!!"))
-  val do1 = io_interp (cps (ast1, [], k))
+  val _ = io_interp (cps (ast1, [], k))
 
   val ast3 = LApp ((LVar "#output"), LMul [LInt 2, LInt 9])
-  val do3 = io_interp (cps (ast3, [("Kilo", (INT 1000))], k))
+  val _ = io_interp (cps (ast3, [("Kilo", (INT 1000))], k))
 
   val ast2 = LApp ((LVar "#output"), (LVar "pi"))
-  val do2 = io_interp (cps (ast2, [("pi", (INT 415))], k))
+  val _ = io_interp (cps (ast2, [("pi", (INT 415))], k))
 
   val ast = LApp ((LVar "#output"), LMul [LInt 2, (LVar "Kilo")])
   val _ = io_interp (cps (ast, [("Kilo", (INT 1000))], k))
@@ -239,18 +218,22 @@ fun void(k) =
   val ast4 =
     LLet (("user", LStr "09"),
       LApp ((LVar "#output"), (LVar "user")))
-  val do4 = io_interp (cps (ast4, [], k))
+  val _ = io_interp (cps (ast4, [], k))
 
   val ast5 =
     LLet (("user", LStr "08"), LLet (("user", LStr "07"), LApp ((LVar "#output"), (LVar "user"))))
-  val do5 = io_interp (cps (ast5, [], k))
+  val _ = io_interp (cps (ast5, [], k))
 
   val ast6 =
     LLet (("user", LStr "3..."),
       LLet (("user", LStr "2.."),
         LLet (("user", LStr "1."), LApp ((LVar "#output"), (LVar "user")))))
-  val do6 = io_interp (cps (ast6, [], k))
-    
+  val _ = io_interp (cps (ast6, [], k))
+
+  val ast7 =
+    LIf ((LBool true), (LApp ((LVar "#output"), (LStr " tru branch !!!!"))), (LApp ((LVar "#output"), (LStr "fals branch !!!!"))))
+  val _ = io_interp (cps (ast7, [], k))
+
 
 (* time travel for 
    [("g", (INT 10))]
