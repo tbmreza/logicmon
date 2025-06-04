@@ -63,7 +63,6 @@ datatype stmt =
   LIf of   expr * expr * expr
 | LIo of   expr
 and expr =
-  (* LLet of  (string * expr) list * expr *)
   LLet of  (string * expr) * expr
 | LInt of  int
 | LMul of  expr list
@@ -84,13 +83,16 @@ datatype value =
 ;
 type env = (string * value) list;
 
+(* It matters that env is an ordered list (of history of values)
+   that `lookup` returns early on the closest/most local value
+   of bound variable. *)
 fun lookup x [] = raise Fail ("Unbound variable: " ^ x)
   | lookup x ((y, v)::env) = if x = y then v else lookup x env;
 
 fun extend x v env = (x, v)::env;
 
-(* Presumably with `io_interp : value -> UNIT` halt/non-halting *)
-(* k differentiation is rendered unnecessary. *)
+(* Presumably with `io_interp : value -> UNIT` halt/non-halting
+   k differentiation is rendered unnecessary. *)
 fun io_interp (OUTPUT s) = (print(s ^ "\n"); UNIT)
   | io_interp (INT n) = (n; UNIT)
   | io_interp (REF v) =
@@ -106,9 +108,10 @@ fun toString(STRING s) = s
   | toString(REF v) = toString v
 ;
 
+(* ??: recursive value unwrap? *)
 fun from_ref (REF (INT n)) = LInt n
-  | from_ref _ = LInt 0
-(* ??: unimplemented exception *)
+  | from_ref (INT n) = LInt n
+  (* | from_ref r = (print("from_ref:\t" ^ r ^ "\n"); LInt 0) ??: show value *)
 
 
 (* Evaluate AST to a value via CPS rules. Saves env on every interesting
@@ -163,17 +166,11 @@ fun cps (LInt v, _, k) = k (INT v)
   b := a + 100    -- env { a: 11, b: 111 }
   pi := 300 + 14  -- env { pi: 314 }
   ()  -- unit body
+  *)
 
-  PICKUP computation proceeds to evaluating expr1 *)
-  | cps (LLet ((k1, expr1), body), env, k) =
+  | cps (LLet ((name, exp), body), env, k) =
+    cps (exp, env, fn exp' => cps (body, (extend name exp' env), k))
 
-    let
-      val _ = 9
-      (* val newenv = extend k1 expr1' env *)
-    in
-      cps (body, env, k)
-    end
-;
 
 fun stmt1(k) = k(print("stmt1"));
 fun stmt2(k) = k(print("stmtB"));
@@ -208,13 +205,7 @@ fun init_k(e: env) =
 
 fun void(k) =
   let
-  (* val ast = LLet([("a1", LStr "bound")], LApp ((LVar "#output"), (LVar "a1")))  (* a1 := "bound"; #output a1 *) *)
   (* val asu = LIf ((LBool true), (LIo (LApp ((LVar "#output"), (LStr "atas")))), (LIo (LApp ((LVar "#output"), (LStr "bawah"))))) *)
-
-  (* val ast3 = (LApp ((LVar "#output"), (LBool true)), k) *)
-  (* val ast4 = (LLet([], LApp ((LVar "#output"), (LStr "from let block"))), k) *)
-  (* val ast5 = LApp ((LVar "#output"), (LVar "status")) *)
-
 
   (* ??: Poster.parsePath "examples/Output.al" < '#output "something"' *)
   (*  "concrete interpreter"
@@ -242,8 +233,24 @@ fun void(k) =
   val ast2 = LApp ((LVar "#output"), (LVar "pi"))
   val do2 = io_interp (cps (ast2, [("pi", (INT 415))], k))
 
-  (* val ast = LApp ((LVar "#output"), LMul [LInt 2, (LVar "Kilo")]) (* ?? *) *)
-  (* val do = io_interp (cps (ast, [("Kilo", (INT 1000))], k)) *)
+  val ast = LApp ((LVar "#output"), LMul [LInt 2, (LVar "Kilo")])
+  val _ = io_interp (cps (ast, [("Kilo", (INT 1000))], k))
+
+  val ast4 =
+    LLet (("user", LStr "09"),
+      LApp ((LVar "#output"), (LVar "user")))
+  val do4 = io_interp (cps (ast4, [], k))
+
+  val ast5 =
+    LLet (("user", LStr "08"), LLet (("user", LStr "07"), LApp ((LVar "#output"), (LVar "user"))))
+  val do5 = io_interp (cps (ast5, [], k))
+
+  val ast6 =
+    LLet (("user", LStr "3..."),
+      LLet (("user", LStr "2.."),
+        LLet (("user", LStr "1."), LApp ((LVar "#output"), (LVar "user")))))
+  val do6 = io_interp (cps (ast6, [], k))
+    
 
 (* time travel for 
    [("g", (INT 10))]
@@ -258,32 +265,12 @@ fun void(k) =
   end;
 void(init_k []);
 
-(* fun TEST(k) = *)
-(*   (* println("hore", (fn _ => println("berhasil", k))); *) *)
-(*   (* letin("okwwdoki", fn a1 => println(a1, k)); *) *)
-(*   in_cps(LInt 999, fn x => x);  (* ??: "save_continuation" *) *)
-(*   (* in_cps(LIf ((LBool true), (LIo (LApp ((LVar "#output"), (LStr "atas")))), (LIo (LApp ((LVar "#output"), (LStr "bawah"))))), fn x => x); *) *)
-(**)
 (*   (* eq(2, 2, fn pred => *) *)
 (*   (*   if pred then *) *)
 (*   (*     println("atas", k) *) *)
 (*   (*   else *) *)
 (*   (*     println("bawah", k)); *) *)
-(*   ; *)
-(**)
-(* (* TEST(fn x => x); *) *)
-(* TEST(fn x => UNIT); *)
 
 (* fun seq(stmt1, stmt2, k) = *)
 (*   stmt1(fn _ => *)
 (*     stmt2(k)); *)
-
-(* fun PROG(k) = *)
-(*   (* seq(stmt1, fn k2 => k2(print("stmt2")), k); *) *)
-(**)
-(*   (* let flow = seq(stmt1, stmt2, k) in *) *)
-(**)
-(*   (* seq(stmt1, stmt2, k) end; *) *)
-(*   14; *)
-(**)
-(* PROG(fn x => x); *)
