@@ -1,39 +1,9 @@
 exception unreachable
 exception unimplemented
 
-fun stringCopy(s, n) =
-    let
-        val t = ref "";  (* Use a reference to simulate a mutable string *)
-
-        fun copyHelper i =
-            if i > n then ()
-            else if i > String.size s then ()
-            else (
-                t := !t ^ str (String.sub(s, i - 1));
-                copyHelper (i + 1)
-            );
-
-        (* Start the copying process *)
-        val _ = copyHelper 1
-    in
-        !t  (* Dereference to get the final string *)
-    end;
-
-(* val result = stringCopy("Poster", 255); *)
-(* print(result); *)
-
-fn nil => 0
- | x::nil => 1
- | z => 2;
-
-
 (* Abstract syntax
 
-
-
 *)
-
-
 datatype expr =
   LLet of  (string * expr) * expr
 | LInt of  int
@@ -43,7 +13,6 @@ datatype expr =
 | LApp of  expr * expr
 | LVar of  string
 | LIf of   expr * expr * expr
-;
 
 datatype value =
   INT of int
@@ -51,7 +20,7 @@ datatype value =
 | BOOL of bool
 | OUTPUT of string
 | REF of value
-| UNIT;
+| UNIT
 
 type env = (string * value) list;
 
@@ -59,24 +28,28 @@ type env = (string * value) list;
    that `lookup` returns early on the closest/most local value
    of bound variable. *)
 fun lookup x [] = raise Fail ("Unbound variable: " ^ x)
-  | lookup x ((y, v)::env) = if x = y then v else lookup x env;
+  | lookup x ((y, v)::env) = if x = y then v else lookup x env
 
-fun extend x v env = (x, v)::env;
+fun extend x v env = (x, v)::env
 
-(* Presumably with `ioInterp : value -> UNIT` halt/non-halting
-   k differentiation is rendered unnecessary. *)
-fun ioInterp (OUTPUT s) = (print(s ^ "\n"); UNIT)
-  | ioInterp (INT v) =    (v; UNIT)
+(* Presumably with `ioInterp : value -> (computation(); UNIT)`,
+   halt/non-halting k differentiation is rendered unnecessary. *)
+fun ioInterp (INT v) =    (v; UNIT)
   | ioInterp (STRING v) = (v; UNIT)
   | ioInterp (BOOL v) =   (v; UNIT)
-  | ioInterp UNIT = ((); UNIT)
-  | ioInterp (REF v) = ioInterp v;
+  | ioInterp  UNIT =     ((); UNIT)
+
+  | ioInterp (OUTPUT s) =
+    (print(s ^ "\n");
+     UNIT)
+
+  | ioInterp (REF v) = ioInterp v
 
 fun toString(STRING s) = s
   | toString(INT v) = Int.toString v
   | toString(BOOL v) = Bool.toString v
   | toString(REF v) = toString v
-  | toString _ = raise unimplemented;
+  | toString _ = raise unimplemented
 
 fun asExpr (BOOL b) = (LBool b)
   | asExpr _ = raise unimplemented
@@ -85,6 +58,27 @@ fun unref (INT n) = LInt n
   | unref (REF r) = unref r
   | unref _ = raise unreachable
 
+
+datatype snapshot =
+  Snapshot of { ssExpr: expr
+              , ssEnv: env
+              , ssCont: value -> value
+              }
+
+(* ??: visualize to web *)
+val mutHistory : (snapshot list) ref
+               = ref []
+
+fun snap! ssExpr ssEnv ssCont = let
+  val ss = Snapshot
+    { ssExpr = ssExpr
+    , ssEnv = ssEnv
+    , ssCont = ssCont
+    }
+  val _ = mutHistory := ss :: !mutHistory
+in
+  ssCont
+end
 
 (* Evaluate AST to a value via CPS rules. Save env on every interesting
    reductions (??: cps invocations in rhs' that extends env?).
@@ -150,15 +144,14 @@ fun cps (LInt v, _, k) = k (INT v)
   *)
 
   | cps (LLet ((name, exp), body), env, k) =
-    cps (exp, env, fn exp' =>
-      cps (body, (extend name exp' env), k))
+    cps (exp, env, fn exp' => let val env' = (extend name exp' env) in
+      cps (body, env', snap! body env' k) end)
 
   | cps _ = raise unimplemented
 
 fun stmt1(k) = k(print("stmt1"));
 fun stmt2(k) = k(print("stmtB"));
 
-  (* ??: save_continuation before applying it *)
 fun put(arg, k) =
   k(print(arg));
 
@@ -169,38 +162,24 @@ fun eq(x, y, k) = k(x = y);
 
 fun letin(str, k) = k(str);
 
-val SNAPSHOT : (env option) ref = ref NONE
-
-(* fn _save(def, e) = *)
-(*   let *)
-(*     val _ = SNAPSHOT := SOME e *)
-(*   in *)
-(*     def *)
-(*   end *)
-(* _save(fn x => x, []) *)
-
-fun kInit(e: env) =
+fun kInit!(e: env) =
   let
-    val _ = SNAPSHOT := SOME e
+    val _ = 0
+    (* val _ = SNAPSHOT := SOME e *)
   in
-    fn x => x
+    fn v => v
   end
 
-(* ??: Poster.parsePath "examples/Output.al" < '#output "something"' *)
-fun script(k, ast) = let
-  val _ = 9
+fun script(ast) = let
+  val builtins = []
+
+  val _ = ioInterp
+    (cps (ast, builtins, snap! ast builtins (fn v => v)))
+
 in () end;
-script(kInit [], LApp ((LVar "#output"), (LStr "something good happened !!!!")));
+script(LApp ((LVar "#output"), (LStr "something awsm happened !!!!")));
 
-fun void(k) =
-  let
-  (*  "concrete interpreter"
-  CPS/cps.sml requires grammar/parser.sml for parsePath : Path -> ast
-  CPS/cps.sml provides                        ioInterp : value -> IO ()
-  cli.sml requires ioInterp, for example `ioInterp (cps "#output 12")`
-
-
-
+(*
   "time travel"
 
   type state = cont
@@ -210,6 +189,7 @@ fun void(k) =
   goto : [state] -> index -> state
 
   *)
+fun void(k) = let
   val ast1 = LApp ((LVar "#output"), (LStr "something good happened !!!!"))
   val _ = ioInterp (cps (ast1, [], k))
 
@@ -253,7 +233,7 @@ fun void(k) =
   in
     print("")
   end;
-void(kInit []);
+void(kInit! []);
 
 (*   (* eq(2, 2, fn pred => *) *)
 (*   (*   if pred then *) *)
