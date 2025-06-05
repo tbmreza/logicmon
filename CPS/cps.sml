@@ -1,3 +1,6 @@
+exception unreachable
+exception unimplemented
+
 fun stringCopy(s, n) =
     let
         val t = ref "";  (* Use a reference to simulate a mutable string *)
@@ -60,33 +63,31 @@ fun lookup x [] = raise Fail ("Unbound variable: " ^ x)
 
 fun extend x v env = (x, v)::env;
 
-(* Presumably with `io_interp : value -> UNIT` halt/non-halting
+(* Presumably with `ioInterp : value -> UNIT` halt/non-halting
    k differentiation is rendered unnecessary. *)
-fun io_interp (OUTPUT s) = (print(s ^ "\n"); UNIT)
-  | io_interp (INT n) = (n; UNIT)
-  | io_interp (REF v) =
-    case v of
-      INT n =>    (n; UNIT)
-    | STRING s => (s; UNIT)
-    | BOOL b =>   (b; UNIT)
-    | UNIT =>     ((); UNIT)
-;
+fun ioInterp (OUTPUT s) = (print(s ^ "\n"); UNIT)
+  | ioInterp (INT v) =    (v; UNIT)
+  | ioInterp (STRING v) = (v; UNIT)
+  | ioInterp (BOOL v) =   (v; UNIT)
+  | ioInterp UNIT = ((); UNIT)
+  | ioInterp (REF v) = ioInterp v;
+
 fun toString(STRING s) = s
   | toString(INT v) = Int.toString v
   | toString(BOOL v) = Bool.toString v
   | toString(REF v) = toString v
-;
+  | toString _ = raise unimplemented;
 
-fun as_expr (BOOL b) = (LBool b)
+fun asExpr (BOOL b) = (LBool b)
+  | asExpr _ = raise unimplemented
 
-(* ??: recursive value unwrap? *)
-fun from_ref (REF (INT n)) = LInt n
-  | from_ref (INT n) = LInt n
-  (* | from_ref r = (print("from_ref:\t" ^ r ^ "\n"); LInt 0) ??: show value *)
+fun unref (INT n) = LInt n
+  | unref (REF r) = unref r
+  | unref _ = raise unreachable
 
 
-(* Evaluate AST to a value via CPS rules. Saves env on every interesting
-   reductions (i.e. most of cps invocations in rhs').
+(* Evaluate AST to a value via CPS rules. Save env on every interesting
+   reductions (??: cps invocations in rhs' that extends env?).
 
     cps :     expr    -> value  *)
 fun cps (LInt v, _, k) = k (INT v)
@@ -106,7 +107,7 @@ fun cps (LInt v, _, k) = k (INT v)
   | cps (LMul [la, lb], env, k) =
     cps (la, env, fn la' =>
       cps (lb, env, fn lb' =>
-        cps (LMul [(from_ref la'), (from_ref lb')], env, k)))
+        cps (LMul [(unref la'), (unref lb')], env, k)))
 
 
   | cps (LApp ((LVar "#output"), arg), env, k) =
@@ -121,7 +122,7 @@ fun cps (LInt v, _, k) = k (INT v)
 
   | cps (LIf (b, thn, els), env, k) =
     cps (b, env, fn b' =>
-      cps (LIf (as_expr b', thn, els), env, k))
+      cps (LIf (asExpr b', thn, els), env, k))
 
 (*
   for i = lo to hi do
@@ -152,6 +153,7 @@ fun cps (LInt v, _, k) = k (INT v)
     cps (exp, env, fn exp' =>
       cps (body, (extend name exp' env), k))
 
+  | cps _ = raise unimplemented
 
 fun stmt1(k) = k(print("stmt1"));
 fun stmt2(k) = k(print("stmtB"));
@@ -177,20 +179,25 @@ val SNAPSHOT : (env option) ref = ref NONE
 (*   end *)
 (* _save(fn x => x, []) *)
 
-fun init_k(e: env) =
+fun kInit(e: env) =
   let
     val _ = SNAPSHOT := SOME e
   in
     fn x => x
   end
 
+(* ??: Poster.parsePath "examples/Output.al" < '#output "something"' *)
+fun script(k, ast) = let
+  val _ = 9
+in () end;
+script(kInit [], LApp ((LVar "#output"), (LStr "something good happened !!!!")));
+
 fun void(k) =
   let
-  (* ??: Poster.parsePath "examples/Output.al" < '#output "something"' *)
   (*  "concrete interpreter"
   CPS/cps.sml requires grammar/parser.sml for parsePath : Path -> ast
-  CPS/cps.sml provides                        io_interp : value -> IO ()
-  cli.sml requires io_interp, for example `io_interp (cps "#output 12")`
+  CPS/cps.sml provides                        ioInterp : value -> IO ()
+  cli.sml requires ioInterp, for example `ioInterp (cps "#output 12")`
 
 
 
@@ -204,35 +211,35 @@ fun void(k) =
 
   *)
   val ast1 = LApp ((LVar "#output"), (LStr "something good happened !!!!"))
-  val _ = io_interp (cps (ast1, [], k))
+  val _ = ioInterp (cps (ast1, [], k))
 
   val ast3 = LApp ((LVar "#output"), LMul [LInt 2, LInt 9])
-  val _ = io_interp (cps (ast3, [("Kilo", (INT 1000))], k))
+  val _ = ioInterp (cps (ast3, [("Kilo", (INT 1000))], k))
 
   val ast2 = LApp ((LVar "#output"), (LVar "pi"))
-  val _ = io_interp (cps (ast2, [("pi", (INT 415))], k))
+  val _ = ioInterp (cps (ast2, [("pi", (INT 415))], k))
 
   val ast = LApp ((LVar "#output"), LMul [LInt 2, (LVar "Kilo")])
-  val _ = io_interp (cps (ast, [("Kilo", (INT 1000))], k))
+  val _ = ioInterp (cps (ast, [("Kilo", (INT 1000))], k))
 
   val ast4 =
     LLet (("user", LStr "09"),
       LApp ((LVar "#output"), (LVar "user")))
-  val _ = io_interp (cps (ast4, [], k))
+  val _ = ioInterp (cps (ast4, [], k))
 
   val ast5 =
     LLet (("user", LStr "08"), LLet (("user", LStr "07"), LApp ((LVar "#output"), (LVar "user"))))
-  val _ = io_interp (cps (ast5, [], k))
+  val _ = ioInterp (cps (ast5, [], k))
 
   val ast6 =
     LLet (("user", LStr "3..."),
       LLet (("user", LStr "2.."),
         LLet (("user", LStr "1."), LApp ((LVar "#output"), (LVar "user")))))
-  val _ = io_interp (cps (ast6, [], k))
+  val _ = ioInterp (cps (ast6, [], k))
 
   val ast7 =
     LIf ((LBool true), (LApp ((LVar "#output"), (LStr " tru branch !!!!"))), (LApp ((LVar "#output"), (LStr "fals branch !!!!"))))
-  val _ = io_interp (cps (ast7, [], k))
+  val _ = ioInterp (cps (ast7, [], k))
 
 
 (* time travel for 
@@ -246,7 +253,7 @@ fun void(k) =
   in
     print("")
   end;
-void(init_k []);
+void(kInit []);
 
 (*   (* eq(2, 2, fn pred => *) *)
 (*   (*   if pred then *) *)
