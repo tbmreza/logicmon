@@ -12,8 +12,9 @@ datatype expr =
 | LInt of  int
 | LMul of  expr list
 | LStr of  string
-| LBool of bool
 | LVar of  string
+| LBool of bool
+| LGt of   expr * expr
 | LIf of   expr * expr * expr
 | LApp of  expr * expr    (* first component reducible to LFn | LPrim *)
 | LPrim of primitive      (* LApp (LPrim OpOutput, LVar "x") *)
@@ -82,18 +83,14 @@ fun ioInterp (INT v) =    (v; UNIT)
   | ioInterp (BOOL v) =   (v; UNIT)
   | ioInterp  UNIT =     ((); UNIT)
 
-  (* | ioInterp (OUTPUT s) = *)
-  (*   (print(s ^ "\n"); *)
-  (*    UNIT) *)
-
   | ioInterp (CLO _) =
     (print("<closure>\n");
      UNIT)
 
   | ioInterp (REF v) = ioInterp v
 
-fun asExpr (BOOL b) = (LBool b)
-  | asExpr _ = raise unimplemented
+fun node (BOOL b) = (LBool b)
+  | node _ = raise unimplemented
 
 fun unref (INT n) = LInt n
   | unref (REF r) = unref r
@@ -164,7 +161,7 @@ fun cps (LInt v, _, k) = k (INT v)
 
   | cps (LIf (b, thn, els), env, k) =
     cps (b, env, fn b' =>
-      cps (LIf (asExpr b', thn, els), env, k))
+      cps (LIf (node b', thn, els), env, k))
 
 (*
   for i = lo to hi do
@@ -195,7 +192,15 @@ fun cps (LInt v, _, k) = k (INT v)
     cps (exp, env, fn exp' => let val env' = (extend name exp' env) in
       cps (body, env', snap! body env' k) end)
 
-  | cps (todo, _, _) = (print("todo"); raise unimplemented)
+
+  | cps (LGt (LInt m, LInt n), env, k) =
+    k (BOOL (m > n))
+
+  | cps (LGt (a, b), env, k) =
+    cps (a, env, fn a' =>
+      cps (b, env, fn b' => cps (LGt (node a', node b'), env, k)))
+
+  (* | cps (todo, _, _) = (print("todo"); raise unimplemented) *)
 
 fun stmt1(k) = k(print("stmt1"));
 fun stmt2(k) = k(print("stmtB"));
@@ -269,12 +274,6 @@ fun void(k) = let
   end;
 void(fn v => v);
 
-(*   (* eq(2, 2, fn pred => *) *)
-(*   (*   if pred then *) *)
-(*   (*     println("atas", k) *) *)
-(*   (*   else *) *)
-(*   (*     println("bawah", k)); *) *)
-
 (* fun seq(stmt1, stmt2, k) = *)
 (*   stmt1(fn _ => *)
 (*     stmt2(k)); *)
@@ -282,3 +281,6 @@ void(fn v => v);
 script(LApp (LPrim OpOutput, LStr "basic OK"));
 script(LApp (LPrim OpOutput, LVar "version"));
 script(LApp (LFn ("x", LApp (LPrim OpOutput, LVar "x")), LStr "basic OK"));
+
+script(LApp (LPrim OpOutput, LGt (LInt 3, LInt 20)));
+(* script(LLet (("loop", LFn ("i", LIf (LGt (LVar "i", LInt 0), , ))))); *)
