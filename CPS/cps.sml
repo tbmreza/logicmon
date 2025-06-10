@@ -1,24 +1,33 @@
 exception unreachable
 exception unimplemented
 
-(* Operations we'd rather not encode from pure lambda calculus closures.
-   op : value -> IO UNIT  *)
+(* Operations we'd rather not encode from pure lambda calculus. *)
 datatype primitive =
   OpOutput
 | OpReadFile
 
+(* ??: ast type checking with gadt or phantom types in SML so we can
+   do...
+
+   LIf of bool expr * 'a expr * 'a expr
+
+   ...statically here. *)
 datatype expr =
   LLet of  (string * expr) * expr
 | LInt of  int
+| LAdd of  expr * expr
 | LMul of  expr list
 | LStr of  string
 | LVar of  string
 | LBool of bool
 | LGt of   expr * expr
 | LIf of   expr * expr * expr
-| LApp of  expr * expr    (* first component reducible to LFn | LPrim *)
+
+| LApp of  expr * expr    (* first component reducible to LDef | LPrim *)
 | LPrim of primitive      (* LApp (LPrim OpOutput, LVar "x") *)
-| LFn of   string * expr  (* fn (string) => expr *)
+| LDef of   string * expr  (* fn (string) => expr *)
+
+| LFor_ of string * expr * expr * expr  (* for (string := expr; string <= expr) { body } *)
 
 (* ??: currying list of formal params *)
 
@@ -89,7 +98,9 @@ fun ioInterp (INT v) =    (v; UNIT)
 
   | ioInterp (REF v) = ioInterp v
 
-fun node (BOOL b) = (LBool b)
+fun node (BOOL b) = LBool b
+  | node (CLO (farg, exp, ctx)) = LDef (farg, exp)
+  (* | node  = *)
   | node _ = raise unimplemented
 
 fun unref (INT n) = LInt n
@@ -126,11 +137,20 @@ fun cps (LInt v, _, k) = k (INT v)
   | cps (LStr v, _, k) = k (STRING v)
   | cps (LBool v, _, k) = k (BOOL v)
 
-  | cps (LFn (farg, body), env, k) =
+  | cps (LDef (farg, body), env, k) =
     k (CLO (farg, body, env))
 
   | cps (LVar var, env, k) = let val var' = lookup var env in
     k (REF var') end
+
+
+  | cps (LAdd (LInt m, LInt n), env, k) =
+    k (INT (m + n))
+
+  | cps (LAdd (la, lb), env, k) =
+    cps (la, env, fn la' =>
+      cps (lb, env, fn lb' =>
+        cps (LAdd (unref la', unref lb'), env, k)))
 
 
   | cps (LMul [LInt m, LInt n], env, k) =
@@ -142,15 +162,28 @@ fun cps (LInt v, _, k) = k (INT v)
         cps (LMul [(unref la'), (unref lb')], env, k)))
 
 
-  | cps (LApp (LFn (farg, exp), arg), env, k) =
+  | cps (LApp (LDef (farg, exp), arg), env, k) =
     (* Closure's env is extended with (farg, arg'). *)
     cps (arg, env, fn arg' => let val env' = (extend farg arg' env) in
       cps (exp, env', k) end)
+
+  (* | cps (LApp (CLO (farg, exp, closed), arg), env, k) = *)
+  (*   let *)
+  (*     val _ = 0 *)
+  (*     (* val ctx = (extend farg arg' closed) *) *)
+  (*   in *)
+  (*     cps (LApp (LDef (farg, exp), arg), closed, k) *)
+  (*   end *)
 
   | cps (LApp (LPrim prim, exp), env, k) =
     cps (exp, env, fn v => k (case prim of
       OpOutput => doOutput v
     | OpReadFile => doReadFile v))
+
+  | cps (LApp (f, arg), env, k) =
+    cps (f, env, fn f' =>
+      cps (arg, env, fn arg' =>
+        cps (LApp (node f', node arg'), env, k)))
 
 
   | cps (LIf (LBool true, exp, _), env, k) =
@@ -199,6 +232,11 @@ fun cps (LInt v, _, k) = k (INT v)
   | cps (LGt (a, b), env, k) =
     cps (a, env, fn a' =>
       cps (b, env, fn b' => cps (LGt (node a', node b'), env, k)))
+
+  (* | cps (LFor_ (loopVar, LInt lo, LInt hi, body), env, k) = *)
+  (* ??: Wrap body with a lambda for let-form desugaring. *)
+
+    (* | cps (LFor_ (loopVar, lo, hi, body), env, k) = *)
 
   (* | cps (todo, _, _) = (print("todo"); raise unimplemented) *)
 
@@ -278,9 +316,27 @@ void(fn v => v);
 (*   stmt1(fn _ => *)
 (*     stmt2(k)); *)
 
-script(LApp (LPrim OpOutput, LStr "basic OK"));
-script(LApp (LPrim OpOutput, LVar "version"));
-script(LApp (LFn ("x", LApp (LPrim OpOutput, LVar "x")), LStr "basic OK"));
+datatype fnValueOrExpr =
+  Fn of expr
+| LFn of value;
 
-script(LApp (LPrim OpOutput, LGt (LInt 3, LInt 20)));
-(* script(LLet (("loop", LFn ("i", LIf (LGt (LVar "i", LInt 0), , ))))); *)
+fun apply (Fn f, arg) = LApp (f, arg)
+  | apply (LFn (CLO (farg, body, _)), arg) = LApp (LDef (farg, body), arg)
+  | apply _ = raise unreachable;
+
+script(apply (Fn (LPrim OpOutput), LVar "version"));
+script(apply (LFn (CLO ("x", LApp (LPrim OpOutput, LVar "x"), Env [])), LStr "yippi"));
+(* script(apply (Fn (LVar "#output"), LStr "\tplease")); *)
+
+
+(* ??: Recursion that prints every time infinitely. *)
+(* let f = CLO ("_", LApp (LVar "f", LInt 0), env) in LApp (LVar f, LInt 0) *)
+
+(* script(LFor_ ("_", LInt 0, LInt 4, LApp (LPrim OpOutput, LStr "\tsomething\n"))); *)
+
+(* script( *)
+(*   LApp( *)
+(*     (LVar "loop"), *)
+(*     LAdd (LVar "i", LInt 1) *)
+(*   ) *)
+(* ); *)
