@@ -13,7 +13,9 @@ datatype primitive =
 
    ...statically here. *)
 datatype expr =
-  LLet of  (string * expr) * expr
+  LUnit
+| LProg of expr * expr  (* a cons-list of statements makes a program *)
+| LLet of  (string * expr) * expr
 | LInt of  int
 | LAdd of  expr * expr
 | LMul of  expr list
@@ -25,18 +27,18 @@ datatype expr =
 
 | LApp of  expr * expr    (* first component reducible to LDef | LPrim *)
 | LPrim of primitive      (* LApp (LPrim OpOutput, LVar "x") *)
-| LDef of   string * expr  (* fn (string) => expr *)
+| LDef of  string * expr  (* fn (string) => expr *)
+| LFn of   value          (* an adapter for when the interpreter expects closures in expr form. *)
 
 | LFor_ of string * expr * expr * expr  (* for (string := expr; string <= expr) { body } *)
 
 (* ??: currying list of formal params *)
 
-datatype value =
+and value =
   UNIT
 | INT of    int
 | STRING of string
 | BOOL of   bool
-| REF of    value
 (* Closure is a contextualized function definition form.
    env ⊢ fn string => expr  *)
 | CLO of string * expr * env
@@ -48,7 +50,6 @@ and env = Env of ((string * value) list);
 fun toString(STRING s) = s
   | toString(INT v) = Int.toString v
   | toString(BOOL v) = Bool.toString v
-  | toString(REF v) = toString v
   | toString _ = raise unimplemented
 
 fun doOutput(arg: value) = let
@@ -96,16 +97,11 @@ fun ioInterp (INT v) =    (v; UNIT)
     (print("<closure>\n");
      UNIT)
 
-  | ioInterp (REF v) = ioInterp v
-
 fun node (BOOL b) = LBool b
-  | node (CLO (farg, exp, ctx)) = LDef (farg, exp)
-  (* | node  = *)
-  | node _ = raise unimplemented
-
-fun unref (INT n) = LInt n
-  | unref (REF r) = unref r
-  | unref _ = raise unreachable
+  | node (CLO (farg, exp, _)) = LDef (farg, exp)
+  | node (INT n) = LInt n
+  | node UNIT = LUnit
+  | node (STRING s) = LStr s
 
 
 datatype snapshot =
@@ -141,7 +137,7 @@ fun cps (LInt v, _, k) = k (INT v)
     k (CLO (farg, body, env))
 
   | cps (LVar var, env, k) = let val var' = lookup var env in
-    k (REF var') end
+    k var' end
 
 
   | cps (LAdd (LInt m, LInt n), env, k) =
@@ -150,7 +146,7 @@ fun cps (LInt v, _, k) = k (INT v)
   | cps (LAdd (la, lb), env, k) =
     cps (la, env, fn la' =>
       cps (lb, env, fn lb' =>
-        cps (LAdd (unref la', unref lb'), env, k)))
+        cps (LAdd (node la', node lb'), env, k)))
 
 
   | cps (LMul [LInt m, LInt n], env, k) =
@@ -159,21 +155,13 @@ fun cps (LInt v, _, k) = k (INT v)
   | cps (LMul [la, lb], env, k) =
     cps (la, env, fn la' =>
       cps (lb, env, fn lb' =>
-        cps (LMul [(unref la'), (unref lb')], env, k)))
+        cps (LMul [(node la'), (node lb')], env, k)))
 
 
   | cps (LApp (LDef (farg, exp), arg), env, k) =
     (* Closure's env is extended with (farg, arg'). *)
     cps (arg, env, fn arg' => let val env' = (extend farg arg' env) in
       cps (exp, env', k) end)
-
-  (* | cps (LApp (CLO (farg, exp, closed), arg), env, k) = *)
-  (*   let *)
-  (*     val _ = 0 *)
-  (*     (* val ctx = (extend farg arg' closed) *) *)
-  (*   in *)
-  (*     cps (LApp (LDef (farg, exp), arg), closed, k) *)
-  (*   end *)
 
   | cps (LApp (LPrim prim, exp), env, k) =
     cps (exp, env, fn v => k (case prim of
@@ -195,6 +183,10 @@ fun cps (LInt v, _, k) = k (INT v)
   | cps (LIf (b, thn, els), env, k) =
     cps (b, env, fn b' =>
       cps (LIf (node b', thn, els), env, k))
+
+
+  | cps (LProg (s, t), env, k) =
+    cps (s, env, fn _ => cps (t, env, k))
 
 (*
   for i = lo to hi do
@@ -255,7 +247,7 @@ fun letin(str, k) = k(str);
 
 fun script(ast) = let
   val builtins = Env
-    [ ("ident", CLO ("x", LVar "x", Env []))
+    [ ("ident",   CLO ("x", LVar "x", Env []))
     , ("#output", CLO ("x", LApp (LPrim OpOutput, LVar "x"), Env []))
     , ("version", STRING "v1.0")
     ]
@@ -267,18 +259,6 @@ in () end;
 
 val mt = Env []
 fun void(k) = let
-  (* val ast1 = LApp ((LVar "#output"), (LStr "something good happened !!!!")) *)
-  (* val _ = ioInterp (cps (ast1, mt, k)) *)
-  (**)
-  (* val ast3 = LApp ((LVar "#output"), LMul [LInt 2, LInt 9]) *)
-  (* val _ = ioInterp (cps (ast3, Env [("Kilo", (INT 1000))], k)) *)
-  (**)
-  (* val ast2 = LApp ((LVar "#output"), (LVar "pi")) *)
-  (* val _ = ioInterp (cps (ast2, Env [("pi", (INT 415))], k)) *)
-  (**)
-  (* val ast = LApp ((LVar "#output"), LMul [LInt 2, (LVar "Kilo")]) *)
-  (* val _ = ioInterp (cps (ast, Env [("Kilo", (INT 1000))], k)) *)
-
   val ast4 =
     LLet (("user", LStr "09"),
       LApp ((LPrim OpOutput), (LVar "user")))
@@ -312,31 +292,28 @@ fun void(k) = let
   end;
 void(fn v => v);
 
-(* fun seq(stmt1, stmt2, k) = *)
-(*   stmt1(fn _ => *)
-(*     stmt2(k)); *)
+fun apply (LFn (CLO (farg, body, _)), arg) = LApp (LDef (farg, body), arg)
+  | apply (f, arg) = LApp (f, arg);
 
-datatype fnValueOrExpr =
-  Fn of expr
-| LFn of value;
-
-fun apply (Fn f, arg) = LApp (f, arg)
-  | apply (LFn (CLO (farg, body, _)), arg) = LApp (LDef (farg, body), arg)
-  | apply _ = raise unreachable;
-
-script(apply (Fn (LPrim OpOutput), LVar "version"));
+script(apply (LPrim OpOutput, LVar "version"));
 script(apply (LFn (CLO ("x", LApp (LPrim OpOutput, LVar "x"), Env [])), LStr "yippi"));
-(* script(apply (Fn (LVar "#output"), LStr "\tplease")); *)
+
+script(apply (LVar "#output", LStr "\tplease"));
+
+script(LProg (apply (LVar "#output", LStr "\tfst"), apply (LVar "#output", LStr "\tsnd")));
+
+script(
+  LLet (
+    ("uprint", LDef ("x", LApp (LPrim OpOutput, LVar "x"))),
+    apply (LVar "uprint", LStr "\tyattayooo"))
+);
 
 
-(* ??: Recursion that prints every time infinitely. *)
-(* let f = CLO ("_", LApp (LVar "f", LInt 0), env) in LApp (LVar f, LInt 0) *)
+(* PICKUP longer program, then visualize history
 
-(* script(LFor_ ("_", LInt 0, LInt 4, LApp (LPrim OpOutput, LStr "\tsomething\n"))); *)
+a := 11
+a := 22
+a := 33
+#output a
 
-(* script( *)
-(*   LApp( *)
-(*     (LVar "loop"), *)
-(*     LAdd (LVar "i", LInt 1) *)
-(*   ) *)
-(* ); *)
+*)
