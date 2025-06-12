@@ -1,3 +1,5 @@
+structure Types = struct
+
 exception unreachable
 exception unimplemented
 
@@ -47,6 +49,24 @@ and value =
    with constructor.  *)
 and env = Env of ((string * value) list);
 
+datatype snapshot =
+  Snapshot of { ssExpr: expr
+              , ssEnv: env
+              , ssCont: value -> value
+              }
+
+end
+
+signature INTERPRETER = sig
+  type expr
+
+  val apply : (expr * expr) -> expr
+  val script : expr -> unit
+end
+
+structure Poster : INTERPRETER = struct
+
+open Types
 fun toString(STRING s) = s
   | toString(INT v) = Int.toString v
   | toString(BOOL v) = Bool.toString v
@@ -103,12 +123,6 @@ fun node (BOOL b) = LBool b
   | node UNIT = LUnit
   | node (STRING s) = LStr s
 
-
-datatype snapshot =
-  Snapshot of { ssExpr: expr
-              , ssEnv: env
-              , ssCont: value -> value
-              }
 
 (* ??: visualize to web *)
 val mutHistory : (snapshot list) ref
@@ -232,19 +246,6 @@ fun cps (LInt v, _, k) = k (INT v)
 
   (* | cps (todo, _, _) = (print("todo"); raise unimplemented) *)
 
-fun stmt1(k) = k(print("stmt1"));
-fun stmt2(k) = k(print("stmtB"));
-
-fun put(arg, k) =
-  k(print(arg));
-
-fun println(arg, k) =
-  put(arg, fn _ => k(print("\n")));
-
-fun eq(x, y, k) = k(x = y);
-
-fun letin(str, k) = k(str);
-
 fun script(ast) = let
   val builtins = Env
     [ ("ident",   CLO ("x", LVar "x", Env []))
@@ -257,63 +258,8 @@ fun script(ast) = let
 
 in () end;
 
-val mt = Env []
-fun void(k) = let
-  val ast4 =
-    LLet (("user", LStr "09"),
-      LApp ((LPrim OpOutput), (LVar "user")))
-  val _ = ioInterp (cps (ast4, mt, k))
-
-  val ast5 =
-    LLet (("user", LStr "08"), LLet (("user", LStr "07"), LApp ((LPrim OpOutput), (LVar "user"))))
-  val _ = ioInterp (cps (ast5, mt, k))
-
-  val ast6 =
-    LLet (("user", LStr "3..."),
-      LLet (("user", LStr "2.."),
-        LLet (("user", LStr "1."), LApp ((LPrim OpOutput), (LVar "user")))))
-  val _ = ioInterp (cps (ast6, mt, k))
-
-  val ast7 =
-    LIf ((LBool true), (LApp ((LPrim OpOutput), (LStr " tru branch !!!!"))), (LApp ((LVar "#output"), (LStr "fals branch !!!!"))))
-  val _ = ioInterp (cps (ast7, mt, k))
-
-
-(* time travel for 
-   [("g", (INT 10))]
-     g := 8
-     g := 5
-     z := 100
-     #output g
- *)
-
-  in
-    print("")
-  end;
-void(fn v => v);
-
 fun apply (LFn (CLO (farg, body, _)), arg) = LApp (LDef (farg, body), arg)
-  | apply (f, arg) = LApp (f, arg);
-
-script(apply (LPrim OpOutput, LVar "version"));
-script(apply (LFn (CLO ("x", LApp (LPrim OpOutput, LVar "x"), Env [])), LStr "yippi"));
-
-script(apply (LVar "#output", LStr "\tplease"));
-
-script(LProg (apply (LVar "#output", LStr "\tfst"), apply (LVar "#output", LStr "\tsnd")));
-
-script(
-  LLet (
-    ("uprint", LDef ("x", LApp (LPrim OpOutput, LVar "x"))),
-    apply (LVar "uprint", LStr "\tyattayooo"))
-);
+  | apply (f, arg) = LApp (f, arg)
 
 
-(* PICKUP longer program, then visualize history
-
-a := 11
-a := 22
-a := 33
-#output a
-
-*)
+end
