@@ -30,7 +30,8 @@ datatype expr =
 | LApp of  expr * expr    (* first component reducible to LDef | LPrim *)
 | LPrim of primitive      (* LApp (LPrim OpOutput, LVar "x") *)
 | LDef of  string * expr  (* fn (string) => expr *)
-| LFn of   value          (* an adapter for when the interpreter expects closures in expr form. *)
+| LFn of   value          (* an adapter for when the interpreter expects
+                             closures in expr form. *)
 
 | LFor_ of string * expr * expr * expr  (* for (string := expr; string <= expr) { body } *)
 
@@ -60,11 +61,13 @@ end
 signature INTERPRETER = sig
   type expr
 
+  val instanceInfo : string
   val apply : (expr * expr) -> expr
   val script : expr -> unit
 end
 
-structure Poster : INTERPRETER = struct
+structure Interpreter : INTERPRETER = struct
+val instanceInfo = "poster 0.1"
 
 open Types
 fun toString(STRING s) = s

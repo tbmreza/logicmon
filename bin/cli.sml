@@ -1,3 +1,5 @@
+use "../CPS/cps.sml";  (* ??: can't use use when sources.cm grows *)
+
 structure CommandLine = struct
     datatype flag = 
         Help | Version | Verbose | Debug | Output of string | Input of string
@@ -131,7 +133,7 @@ structure CommandLine = struct
     fun run_app config =
         let
             val Config {help, version, verbose, debug, input_file, output_file, remaining_args} = config
-            val version_text = "v1.0\n"
+            val version_text = Interpreter.instanceInfo ^ "\n"
         in
             if help then
                 print (help_text ^ "\n")
@@ -182,26 +184,6 @@ structure Main = struct
         in
             List.appi run_test test_cases
         end
-    
-    (* Main entry point *)
-    (* fun main () = *)
-    (*     let *)
-    (*         val args = CommandLine.arguments() (* This gets actual command line args *) *)
-    (*     in *)
-    (*         if null args then *)
-    (*             (print "No arguments provided. Running test examples:\n\n"; *)
-    (*              test_examples()) *)
-    (*         else *)
-    (*             let *)
-    (*                 val config = parse_args args *)
-    (*             in *)
-    (*                 run_app config *)
-    (*             end *)
-    (*             handle ParseError msg =>  *)
-    (*                 (print ("Error: " ^ msg ^ "\n"); *)
-    (*                  print help_text; *)
-    (*                  print "\n") *)
-    (*     end *)
 end
 
 (* In repl *)
