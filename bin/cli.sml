@@ -1,46 +1,46 @@
-use "../CPS/cps.sml";  (* ??: can't use use when sources.cm grows *)
+use "compiler/cps.sml";  (* ??: can't use use when sources.cm grows *)
 
 structure CommandLine = struct
-    datatype flag = 
-        Help | Version | Verbose | Debug | Output of string | Input of string
+  datatype flag = 
+    Help | Version | Verbose | Debug | Output of string | Input of string
     
-    datatype config = Config of {
-        help: bool,
-        version: bool,
-        verbose: bool,
-        debug: bool,
-        input_file: string option,
-        output_file: string option,
-        remaining_args: string list
-    }
+  datatype config = Config of {
+    help: bool,
+    version: bool,
+    verbose: bool,
+    debug: bool,
+    input_file: string option,
+    output_file: string option,
+    remaining_args: string list
+  }
     
-    (* Catch-all exception for usage errors *)
-    exception ParseError of string
+  (* Catch-all exception for usage errors *)
+  exception ParseError of string
     
-    val default_config = Config {
-        help = false,
-        version = false, 
-        verbose = false,
-        debug = false,
-        input_file = NONE,
-        output_file = NONE,
-        remaining_args = []
-    }
+  val default_config = Config {
+    help = false,
+    version = false, 
+    verbose = false,
+    debug = false,
+    input_file = NONE,
+    output_file = NONE,
+    remaining_args = []
+  }
     
-    fun update_config (Config {help, version, verbose, debug, input_file, output_file, remaining_args}) flag =
-        case flag of
-            Help => Config {help=true, version=version, verbose=verbose, debug=debug, 
-                          input_file=input_file, output_file=output_file, remaining_args=remaining_args}
-          | Version => Config {help=help, version=true, verbose=verbose, debug=debug,
-                             input_file=input_file, output_file=output_file, remaining_args=remaining_args}
-          | Verbose => Config {help=help, version=version, verbose=true, debug=debug,
-                             input_file=input_file, output_file=output_file, remaining_args=remaining_args}
-          | Debug => Config {help=help, version=version, verbose=verbose, debug=true,
-                           input_file=input_file, output_file=output_file, remaining_args=remaining_args}
-          | Input filename => Config {help=help, version=version, verbose=verbose, debug=debug,
-                                    input_file=SOME filename, output_file=output_file, remaining_args=remaining_args}
-          | Output filename => Config {help=help, version=version, verbose=verbose, debug=debug,
-                                     input_file=input_file, output_file=SOME filename, remaining_args=remaining_args}
+  fun update_config (Config {help, version, verbose, debug, input_file, output_file, remaining_args}) flag =
+    case flag of
+      Help => Config {help=true, version=version, verbose=verbose, debug=debug, 
+                    input_file=input_file, output_file=output_file, remaining_args=remaining_args}
+    | Version => Config {help=help, version=true, verbose=verbose, debug=debug,
+                       input_file=input_file, output_file=output_file, remaining_args=remaining_args}
+    | Verbose => Config {help=help, version=version, verbose=true, debug=debug,
+                       input_file=input_file, output_file=output_file, remaining_args=remaining_args}
+    | Debug => Config {help=help, version=version, verbose=verbose, debug=true,
+                     input_file=input_file, output_file=output_file, remaining_args=remaining_args}
+    | Input filename => Config {help=help, version=version, verbose=verbose, debug=debug,
+                              input_file=SOME filename, output_file=output_file, remaining_args=remaining_args}
+    | Output filename => Config {help=help, version=version, verbose=verbose, debug=debug,
+                               input_file=input_file, output_file=SOME filename, remaining_args=remaining_args}
     
     fun parse_arg arg =
         case arg of
@@ -186,5 +186,4 @@ structure Main = struct
         end
 end
 
-(* In repl *)
-(* Main.test_examples(); *)
+val _ = Main.test_examples()

@@ -10,5 +10,4 @@ Group is
   poster.grm
   poster.lex
   parser.sml
-  (* ../bin/cli.sml *)
   opt.sml

@@ -13,12 +13,20 @@ struct
     in PosterParser.parse(0,lexstream,print_error,())
     end
 
-  fun load s =
+  (* ??: user provided config from cli *)
+  (* fun tokensList(cliConf { sourcePath }) =  *)
+
+  fun mtProgram() = [PosterLrVals.Tokens.EOF(0,0)]
+
+  fun load sourcePath =
     let
-      val dev = TextIO.openIn s
-      val lexer = PosterParser.makeLexer(fn i => TextIO.inputN(dev,i))
-      val dummyEOF = PosterLrVals.Tokens.EOF(0,0)
-      val dummySEMI = PosterLrVals.Tokens.SEMI(0,0)
+      val stream = TextIO.openIn sourcePath
+      val lexer =
+        PosterParser.makeLexer(
+          fn i => TextIO.inputN(stream,i))
+
+      val tEOF = PosterLrVals.Tokens.EOF(0,0)
+      (* val dummySEMI = PosterLrVals.Tokens.SEMI(0,0) *)
 
       fun loop lexer =
         let
@@ -26,9 +34,10 @@ struct
           val (nextToken,lexer) = PosterParser.Stream.get lexer
           val _ = case result of
                        SOME r => TextIO.output(TextIO.stdOut, "result = " ^ (Int.toString r) ^ "\n")
+                       (* SOME (SOME r) => TextIO.output(TextIO.stdOut, "result = " ^ (Int.toString r) ^ "\n") *)
                      | NONE => ()
         in
-          if PosterParser.sameToken(nextToken,dummyEOF) then () else loop lexer
+          if PosterParser.sameToken(nextToken,tEOF) then () else loop lexer
         end
     in loop lexer
     end

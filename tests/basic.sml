@@ -1,5 +1,6 @@
-use "CPS/cps.sml";
-open Interpreter; open Types;
+use "compiler/cps.sml";
+open Interpreter;
+open Types;
 
 script(apply (LPrim OpOutput, LVar "version"));
 script(apply (LFn (CLO ("x", LApp (LPrim OpOutput, LVar "x"), Env [])), LStr "yippi"));
